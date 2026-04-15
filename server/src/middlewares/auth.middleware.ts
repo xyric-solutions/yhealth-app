@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { ApiError } from '../utils/ApiError.js';
 import { env } from '../config/env.config.js';
 import type { AuthenticatedRequest, IJwtPayload, UserRole } from '../types/index.js';
+import { query } from '../database/pg.js';
 
 /**
  * Extract token from request
@@ -20,11 +21,8 @@ function extractToken(req: Request): string | null {
     return cookieToken;
   }
 
-  // Check query parameter (for WebSocket connections)
-  const queryToken = req.query['token'];
-  if (typeof queryToken === 'string') {
-    return queryToken;
-  }
+  // Query parameter token removed for security — tokens in URLs are logged and
+  // leaked via Referer headers. WebSocket auth uses socket.io handshake instead.
 
   return null;
 }
@@ -100,22 +98,61 @@ export function optionalAuth(
 
 /**
  * Role-based authorization middleware
+ * Checks JWT role first, then falls back to database if role doesn't match
+ * This handles cases where the JWT has a stale role after role changes
  */
 export function authorize(...allowedRoles: UserRole[]) {
-  return (req: Request, _res: Response, next: NextFunction): void => {
-    const user = (req as AuthenticatedRequest).user;
+  return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const user = (req as AuthenticatedRequest).user;
 
-    if (!user) {
-      next(ApiError.unauthorized('Authentication required'));
-      return;
+      if (!user) {
+        next(ApiError.unauthorized('Authentication required'));
+        return;
+      }
+
+      // Fast path: Check JWT role first (most common case)
+      if (allowedRoles.includes(user.role)) {
+        next();
+        return;
+      }
+
+      // Slow path: JWT role doesn't match - check database for current role
+      // This handles stale tokens after role changes
+      const roleResult = await query<{ role: string }>(
+        `SELECT r.slug as role FROM users u
+         LEFT JOIN roles r ON u.role_id = r.id
+         WHERE u.id = $1`,
+        [user.userId]
+      );
+
+      if (roleResult.rows.length === 0) {
+        next(ApiError.notFound('User not found'));
+        return;
+      }
+
+      const dbRole = roleResult.rows[0].role as UserRole;
+
+      // Update the user object with the database role for this request
+      // (Note: This doesn't update the JWT, but allows the request to proceed)
+      if (allowedRoles.includes(dbRole)) {
+        // Update the request user object with the correct role
+        (req as AuthenticatedRequest).user = {
+          ...user,
+          role: dbRole,
+        };
+        next();
+        return;
+      }
+
+      // User doesn't have the required role in database either
+      next(ApiError.forbidden(
+        `Access denied. Required roles: ${allowedRoles.join(', ')}. ` +
+        `Your current role is "${dbRole}". Please refresh your token or log out and log back in.`
+      ));
+    } catch (error) {
+      next(error);
     }
-
-    if (!allowedRoles.includes(user.role)) {
-      next(ApiError.forbidden(`Access denied. Required roles: ${allowedRoles.join(', ')}`));
-      return;
-    }
-
-    next();
   };
 }
 

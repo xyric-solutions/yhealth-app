@@ -1,5 +1,5 @@
 /**
- * yHealth Email Templates
+ * Balencia Email Templates
  * Modern, responsive email templates for the AI Life Coach platform
  */
 
@@ -74,22 +74,22 @@ export type EmailTemplateType =
  * Email subject lines
  */
 export const EMAIL_SUBJECTS: Record<EmailTemplateType, string> = {
-  'verification': 'Verify Your Email - yHealth',
-  'resend-verification': 'New Verification Link - yHealth',
-  'email-verified': 'Email Verified! - yHealth',
-  'password-reset': 'Reset Your Password - yHealth',
-  'password-changed': 'Password Changed - yHealth',
-  'password-reset-otp': 'Your Password Reset Code - yHealth',
-  'security-alert': 'Security Alert - yHealth',
-  'welcome': 'Welcome to yHealth - Your AI Life Coach!',
-  'assessment-reminder': 'Complete Your Assessment - yHealth',
-  'integration-reminder': 'Connect Your Devices - yHealth',
-  'goal-set': 'Goal Set! - yHealth',
-  'onboarding-complete': 'You\'re All Set! - yHealth',
-  'weekly-progress': 'Your Weekly Progress - yHealth',
-  'milestone-achieved': 'Milestone Achieved! - yHealth',
-  'streak-milestone': 'Streak Milestone! - yHealth',
-  're-engagement': 'We Miss You! - yHealth',
+  'verification': 'Verify Your Email - Balencia',
+  'resend-verification': 'New Verification Link - Balencia',
+  'email-verified': 'Email Verified! - Balencia',
+  'password-reset': 'Reset Your Password - Balencia',
+  'password-changed': 'Password Changed - Balencia',
+  'password-reset-otp': 'Your Password Reset Code - Balencia',
+  'security-alert': 'Security Alert - Balencia',
+  'welcome': 'Welcome to Balencia - Your AI Life Coach!',
+  'assessment-reminder': 'Complete Your Assessment - Balencia',
+  'integration-reminder': 'Connect Your Devices - Balencia',
+  'goal-set': 'Goal Set! - Balencia',
+  'onboarding-complete': 'You\'re All Set! - Balencia',
+  'weekly-progress': 'Your Weekly Progress - Balencia',
+  'milestone-achieved': 'Milestone Achieved! - Balencia',
+  'streak-milestone': 'Streak Milestone! - Balencia',
+  're-engagement': 'We Miss You! - Balencia',
 };
 
 import { BRAND_COLORS as BrandColors } from './base.template.js';

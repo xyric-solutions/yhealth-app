@@ -2,7 +2,7 @@
  * Cache Service Unit Tests
  */
 
-import { cacheService } from '../../../src/services/cache.service.js';
+import { cache as cacheService } from '../../../src/services/cache.service.js';
 
 describe('CacheService', () => {
   beforeEach(() => {
@@ -31,9 +31,9 @@ describe('CacheService', () => {
       expect(result).toEqual(value);
     });
 
-    it('should return null for non-existent key', () => {
+    it('should return undefined for non-existent key', () => {
       const result = cacheService.get<string>('non-existent-key');
-      expect(result).toBeNull();
+      expect(result).toBeUndefined();
     });
 
     it('should set value with TTL', () => {
@@ -48,20 +48,20 @@ describe('CacheService', () => {
     });
   });
 
-  describe('del', () => {
+  describe('delete', () => {
     it('should delete an existing key', () => {
       const key = 'delete-me';
       cacheService.set(key, 'value');
 
       expect(cacheService.get<string>(key)).toBe('value');
 
-      const deleted = cacheService.del(key);
+      const deleted = cacheService.delete(key);
       expect(deleted).toBe(1);
-      expect(cacheService.get<string>(key)).toBeNull();
+      expect(cacheService.get<string>(key)).toBeUndefined();
     });
 
     it('should return 0 when deleting non-existent key', () => {
-      const deleted = cacheService.del('non-existent');
+      const deleted = cacheService.delete('non-existent');
       expect(deleted).toBe(0);
     });
   });
@@ -85,9 +85,9 @@ describe('CacheService', () => {
 
       cacheService.flush();
 
-      expect(cacheService.get<string>('key1')).toBeNull();
-      expect(cacheService.get<string>('key2')).toBeNull();
-      expect(cacheService.get<string>('key3')).toBeNull();
+      expect(cacheService.get<string>('key1')).toBeUndefined();
+      expect(cacheService.get<string>('key2')).toBeUndefined();
+      expect(cacheService.get<string>('key3')).toBeUndefined();
     });
   });
 
@@ -122,13 +122,13 @@ describe('CacheService', () => {
       expect(result['multi3']).toBe('value3');
     });
 
-    it('should return null for missing keys in mget', () => {
+    it('should return undefined for missing keys in mget', () => {
       cacheService.set('exists', 'value');
 
       const result = cacheService.mget<string>(['exists', 'missing']);
 
       expect(result['exists']).toBe('value');
-      expect(result['missing']).toBeNull();
+      expect(result['missing']).toBeUndefined();
     });
   });
 

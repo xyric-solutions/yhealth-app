@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-interface AvatarUploaderProps {
+export interface AvatarUploaderProps {
   currentAvatar?: string | null;
   fallback: string;
   onUpload: (file: File) => Promise<string>;

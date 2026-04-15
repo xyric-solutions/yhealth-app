@@ -1,0 +1,39 @@
+<%- include('layouts/base', {
+  title: subject || 'A Message from Your AI Coach',
+  preheader: body ? body.substring(0, 80) : 'Your AI coach has a new insight for you.',
+  content: `
+    <tr>
+      <td style="padding: 32px 24px;">
+        <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #111827;">
+          Hi ${firstName || 'there'} 👋
+        </h1>
+        <p style="margin: 0 0 24px; font-size: 15px; line-height: 24px; color: #6b7280;">
+          Your AI coach has something for you:
+        </p>
+
+        <!-- Coach Message -->
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom: 24px;">
+          <tr>
+            <td style="padding: 20px; background: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 100%); border-radius: 12px; border-left: 4px solid #14b8a6;">
+              <p style="margin: 0; font-size: 15px; line-height: 24px; color: #1f2937;">
+                ${body || 'Check your chat for the latest insight.'}
+              </p>
+            </td>
+          </tr>
+        </table>
+
+        <!-- CTA Button -->
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td align="center" style="padding: 8px 0 24px;">
+              <a href="${appUrl || 'https://yhealth.app'}/chat"
+                 style="display: inline-block; padding: 14px 32px; background: #14b8a6; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; border-radius: 8px;">
+                ${cta || 'Open Chat'} →
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  `
+}) %>

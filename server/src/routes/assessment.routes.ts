@@ -138,4 +138,17 @@ router.post(
   assessmentController.commitToGoal
 );
 
+// ============================================
+// GOAL ACTIONS & AUTO-PROGRESS
+// ============================================
+
+// Get or create goal actions (AI decomposition)
+router.get('/goals/:goalId/actions', assessmentController.getGoalActions);
+
+// Toggle daily action completion
+router.post('/goals/:goalId/actions/:actionId/toggle', assessmentController.toggleGoalAction);
+
+// Get auto-calculated progress
+router.get('/goals/:goalId/auto-progress', assessmentController.getGoalAutoProgress);
+
 export default router;

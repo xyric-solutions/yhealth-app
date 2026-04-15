@@ -4,10 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Bell,
-  BellOff,
   Check,
   CheckCheck,
   ChevronRight,
+  ChevronLeft,
   Filter,
   Loader2,
   AlertCircle,
@@ -18,7 +18,6 @@ import {
   Trophy,
   Target,
   Flame,
-  Zap,
   Heart,
   MessageSquare,
   Settings,
@@ -33,12 +32,10 @@ import {
   CheckSquare,
   Square,
   Search,
-  ChevronDown,
   Eye,
   EyeOff,
   Calendar,
   TrendingUp,
-  Star,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api-client";
 
@@ -77,6 +74,15 @@ interface UnreadCount {
   unreadCount: number;
   urgentCount: number;
   highCount: number;
+}
+
+interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
 }
 
 // Type config
@@ -164,16 +170,48 @@ const priorityConfig: Record<
 
 // Format relative time
 function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
+  // Handle invalid or empty dates
+  if (!dateString) {
+    return "Unknown";
+  }
+
+  // Parse the date - PostgreSQL TIMESTAMP without timezone is stored as local time
+  // but JSON serialization sends it without timezone info.
+  // We need to parse it correctly based on whether it has timezone info.
+  let date: Date;
+  const hasTimezoneInfo = dateString.endsWith('Z') ||
+    /[+-]\d{2}:\d{2}$/.test(dateString) ||
+    /[+-]\d{4}$/.test(dateString);
+
+  if (hasTimezoneInfo) {
+    // Already has timezone info - parse directly
+    date = new Date(dateString);
+  } else {
+    // No timezone info - the timestamp is in server's local time (likely UTC)
+    // Append 'Z' to treat as UTC since PostgreSQL sends UTC timestamps
+    date = new Date(dateString + 'Z');
+  }
+
+  // Handle invalid dates
+  if (isNaN(date.getTime())) {
+    return "Unknown";
+  }
+
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
+  // Handle future dates (server time mismatch)
+  if (diffMs < 0) {
+    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+
   if (diffMins < 1) return "Just now";
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays}d ago`;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -324,6 +362,7 @@ const NotificationDetailModal = ({
             {/* Image */}
             {notification.imageUrl && (
               <div className="mb-4 rounded-xl overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={notification.imageUrl}
                   alt=""
@@ -464,11 +503,15 @@ const EmptyState = ({ filter, showArchived }: { filter: string; showArchived: bo
   );
 };
 
+const ITEMS_PER_PAGE = 15;
+
 export function NotificationsTab() {
   // State
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [stats, setStats] = useState<NotificationStats | null>(null);
   const [unreadCount, setUnreadCount] = useState<UnreadCount | null>(null);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -496,14 +539,15 @@ export function NotificationsTab() {
   const [isActioning, setIsActioning] = useState(false);
 
   // Fetch notifications
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (page = currentPage) => {
     setIsLoading(true);
     setError(null);
 
     try {
       const params: Record<string, string> = {
         isArchived: showArchived.toString(),
-        limit: "50",
+        limit: ITEMS_PER_PAGE.toString(),
+        page: page.toString(),
       };
 
       if (filter === "unread") {
@@ -519,13 +563,25 @@ export function NotificationsTab() {
       }
 
       const [notificationsRes, statsRes, countRes] = await Promise.all([
-        api.get<{ data: Notification[] }>("/notifications", { params }),
+        api.get<Notification[]>("/notifications", { params }),
         api.get<NotificationStats>("/notifications/stats"),
         api.get<UnreadCount>("/notifications/unread-count"),
       ]);
 
       if (notificationsRes.success && notificationsRes.data) {
-        setNotifications(notificationsRes.data.data || []);
+        // API returns array directly in data field
+        setNotifications(Array.isArray(notificationsRes.data) ? notificationsRes.data : []);
+        // Extract pagination meta from response (meta is at the top level of the response)
+        if (notificationsRes.meta) {
+          setPagination({
+            page: notificationsRes.meta.page,
+            limit: notificationsRes.meta.limit,
+            total: notificationsRes.meta.total,
+            totalPages: notificationsRes.meta.totalPages,
+            hasNextPage: notificationsRes.meta.hasNextPage,
+            hasPrevPage: notificationsRes.meta.hasPrevPage,
+          });
+        }
       }
       if (statsRes.success && statsRes.data) {
         setStats(statsRes.data);
@@ -542,11 +598,22 @@ export function NotificationsTab() {
     } finally {
       setIsLoading(false);
     }
-  }, [filter, typeFilter, priorityFilter, showArchived]);
+  }, [filter, typeFilter, priorityFilter, showArchived, currentPage]);
 
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, typeFilter, priorityFilter, showArchived]);
+
+  // Page change handler
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    fetchNotifications(page);
+  };
 
   // Filter notifications by search
   const filteredNotifications = useMemo(() => {
@@ -645,8 +712,8 @@ export function NotificationsTab() {
     }
   };
 
-  // Delete
-  const deleteNotification = async (id: string) => {
+  // Delete single notification (used by modal)
+  const _deleteNotification = async (id: string) => {
     try {
       await api.delete(`/notifications/${id}`);
       setNotifications((prev) => prev.filter((n) => n.id !== id));
@@ -655,6 +722,8 @@ export function NotificationsTab() {
       console.error("Failed to delete:", err);
     }
   };
+  // Expose for potential future use
+  void _deleteNotification;
 
   const deleteSelected = async () => {
     if (deleteModal.ids.length === 0) return;
@@ -726,7 +795,7 @@ export function NotificationsTab() {
         </div>
         <p className="text-red-400 mb-4">{error}</p>
         <button
-          onClick={fetchNotifications}
+          onClick={() => fetchNotifications()}
           className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors cursor-pointer"
         >
           <RefreshCw className="w-4 h-4" />
@@ -963,7 +1032,7 @@ export function NotificationsTab() {
             </button>
           )}
           <button
-            onClick={fetchNotifications}
+            onClick={() => fetchNotifications()}
             disabled={isLoading}
             className="p-2 rounded-xl bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer"
           >
@@ -1184,6 +1253,105 @@ export function NotificationsTab() {
           )}
         </AnimatePresence>
       </motion.div>
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-center gap-2 pt-4"
+        >
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={!pagination.hasPrevPage || isLoading}
+            className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          <div className="flex items-center gap-1">
+            {/* Simple pagination: show all pages if <= 7, otherwise show smart range */}
+            {pagination.totalPages <= 7 ? (
+              // Show all pages for small page counts
+              Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`w-10 h-10 rounded-lg border transition-colors ${
+                    page === currentPage
+                      ? "bg-cyan-500 border-cyan-500 text-white"
+                      : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  {page}
+                </button>
+              ))
+            ) : (
+              // Smart pagination for larger page counts
+              <>
+                {/* First page */}
+                <button
+                  onClick={() => handlePageChange(1)}
+                  className={`w-10 h-10 rounded-lg border transition-colors ${
+                    currentPage === 1
+                      ? "bg-cyan-500 border-cyan-500 text-white"
+                      : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  1
+                </button>
+
+                {/* Ellipsis before current range */}
+                {currentPage > 3 && <span className="px-2 text-slate-500">...</span>}
+
+                {/* Pages around current */}
+                {Array.from({ length: 3 }, (_, i) => currentPage - 1 + i)
+                  .filter((page) => page > 1 && page < pagination.totalPages)
+                  .map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => handlePageChange(page)}
+                      className={`w-10 h-10 rounded-lg border transition-colors ${
+                        page === currentPage
+                          ? "bg-cyan-500 border-cyan-500 text-white"
+                          : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+
+                {/* Ellipsis after current range */}
+                {currentPage < pagination.totalPages - 2 && <span className="px-2 text-slate-500">...</span>}
+
+                {/* Last page */}
+                <button
+                  onClick={() => handlePageChange(pagination.totalPages)}
+                  className={`w-10 h-10 rounded-lg border transition-colors ${
+                    currentPage === pagination.totalPages
+                      ? "bg-cyan-500 border-cyan-500 text-white"
+                      : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  {pagination.totalPages}
+                </button>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={!pagination.hasNextPage || isLoading}
+            className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+
+          <span className="ml-4 text-sm text-slate-500">
+            Page {currentPage} of {pagination.totalPages} ({pagination.total} total)
+          </span>
+        </motion.div>
+      )}
 
       {/* Notification Detail Modal */}
       <NotificationDetailModal

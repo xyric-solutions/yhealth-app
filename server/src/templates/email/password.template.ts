@@ -28,7 +28,7 @@ export function passwordResetTemplate(data: PasswordResetEmailData): string {
 
   const content = `
     <p style="margin: 0 0 20px 0;">
-      We received a request to reset the password for your yHealth account. If you made this request, click the button below to create a new password:
+      We received a request to reset the password for your Balencia account. If you made this request, click the button below to create a new password:
     </p>
 
     ${alertBox('warning', `
@@ -64,13 +64,13 @@ export function passwordResetTemplate(data: PasswordResetEmailData): string {
     </p>
     <p style="margin: 16px 0 0 0; font-size: 13px; color: ${BRAND_COLORS.gray500};">
       <strong>Didn't request this?</strong> If you didn't request a password reset, someone may be trying to access your account.
-      <a href="mailto:security@yhealth.app" style="color: ${BRAND_COLORS.primary};">Contact our security team</a> if you're concerned.
+      <a href="mailto:security@balencia.app" style="color: ${BRAND_COLORS.primary};">Contact our security team</a> if you're concerned.
     </p>
   `;
 
   return baseEmailLayout({
-    preheader: `Reset your yHealth password - This link expires in ${expiresIn}`,
-    title: 'Password Reset Request - yHealth',
+    preheader: `Reset your Balencia password - This link expires in ${expiresIn}`,
+    title: 'Password Reset Request - Balencia',
     greeting: `Hi ${firstName},`,
     content,
     ctaButton: {
@@ -80,7 +80,7 @@ export function passwordResetTemplate(data: PasswordResetEmailData): string {
     },
     secondaryContent,
     footer: {
-      text: "If you're having trouble, contact us at security@yhealth.app",
+      text: "If you're having trouble, contact us at security@balencia.app",
       showSocial: false,
       showUnsubscribe: false,
     },
@@ -111,7 +111,7 @@ export function passwordChangedTemplate(data: {
     </div>
 
     <p style="margin: 0 0 20px 0; text-align: center; font-size: 16px;">
-      Your yHealth password has been successfully changed.
+      Your Balencia password has been successfully changed.
     </p>
 
     ${alertBox('success', 'Your account is now secured with your new password. You can sign in with your new credentials.')}
@@ -137,17 +137,17 @@ export function passwordChangedTemplate(data: {
     ${alertBox('warning', `
       <strong>Wasn't you?</strong> If you didn't change your password, your account may be compromised.
       Please <a href="${securityUrl}" style="color: ${BRAND_COLORS.primary}; font-weight: 600;">secure your account immediately</a>
-      or contact us at security@yhealth.app.
+      or contact us at security@balencia.app.
     `)}
   `;
 
   return baseEmailLayout({
-    preheader: `Your yHealth password has been changed - ${timestamp}`,
-    title: 'Password Changed - yHealth',
+    preheader: `Your Balencia password has been changed - ${timestamp}`,
+    title: 'Password Changed - Balencia',
     greeting: `Hi ${firstName},`,
     content,
     footer: {
-      text: 'For security questions, contact security@yhealth.app',
+      text: 'For security questions, contact security@balencia.app',
       showSocial: false,
       showUnsubscribe: false,
     },
@@ -166,7 +166,7 @@ export function passwordResetOTPTemplate(data: {
 
   const content = `
     <p style="margin: 0 0 20px 0;">
-      Use the code below to reset your yHealth password. Enter this code in the app to proceed:
+      Use the code below to reset your Balencia password. Enter this code in the app to proceed:
     </p>
 
     ${codeBox(otpCode, 'Your Reset Code')}
@@ -179,12 +179,12 @@ export function passwordResetOTPTemplate(data: {
   `;
 
   return baseEmailLayout({
-    preheader: `Your yHealth password reset code: ${otpCode} - Expires in ${expiresIn}`,
-    title: 'Password Reset Code - yHealth',
+    preheader: `Your Balencia password reset code: ${otpCode} - Expires in ${expiresIn}`,
+    title: 'Password Reset Code - Balencia',
     greeting: `Hi ${firstName},`,
     content,
     footer: {
-      text: "Need help? Contact us at support@yhealth.app",
+      text: "Need help? Contact us at support@balencia.app",
       showSocial: false,
       showUnsubscribe: false,
     },
@@ -206,7 +206,7 @@ export function securityAlertTemplate(data: {
 
   const content = `
     ${alertBox('error', `
-      <strong>Security Alert:</strong> We detected ${attempts} failed login attempts to your yHealth account.
+      <strong>Security Alert:</strong> We detected ${attempts} failed login attempts to your Balencia account.
     `)}
 
     <p style="margin: 20px 0;">
@@ -247,8 +247,8 @@ export function securityAlertTemplate(data: {
   `;
 
   return baseEmailLayout({
-    preheader: `Security Alert: ${attempts} failed login attempts detected on your yHealth account`,
-    title: 'Security Alert - yHealth',
+    preheader: `Security Alert: ${attempts} failed login attempts detected on your Balencia account`,
+    title: 'Security Alert - Balencia',
     greeting: `Hi ${firstName},`,
     content,
     ctaButton: {
@@ -257,7 +257,7 @@ export function securityAlertTemplate(data: {
       color: '#EF4444',
     },
     footer: {
-      text: 'For immediate assistance, contact security@yhealth.app',
+      text: 'For immediate assistance, contact security@balencia.app',
       showSocial: false,
       showUnsubscribe: false,
     },

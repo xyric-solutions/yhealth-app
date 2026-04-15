@@ -14,6 +14,7 @@ import {
   deleteFile,
   listFiles,
   uploadAvatar,
+  uploadVoiceAssistantAvatar,
   healthCheck,
 } from '../controllers/upload.controller.js';
 import type { FileType } from '../services/r2.service.js';
@@ -31,6 +32,10 @@ router.post('/presign', getPresignedUrl);
 
 // Avatar upload (convenience endpoint)
 router.post('/avatar', uploadAvatarMiddleware, uploadAvatar);
+
+// Voice assistant avatar upload (uploads and updates preferences)
+// Use 'file' field name to match frontend FormData
+router.post('/voice-assistant-avatar', createUploadMiddleware('avatar', 'file'), uploadVoiceAssistantAvatar);
 
 // Get signed URL for file access (key is base64 encoded to handle slashes)
 router.get('/url/:key', getFileUrl);

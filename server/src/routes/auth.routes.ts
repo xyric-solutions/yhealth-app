@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { validate } from '../middlewares/validate.middleware.js';
-import { authenticate } from '../middlewares/auth.middleware.js';
-import { authLimiter, strictLimiter } from '../middlewares/rateLimiter.middleware.js';
+import { authenticate, verifyRefreshToken } from '../middlewares/auth.middleware.js';
+import { authLimiter, strictLimiter, createRateLimiter } from '../middlewares/rateLimiter.middleware.js';
 import {
   registerSchema,
   verifyRegistrationSchema,
@@ -17,7 +17,29 @@ import {
   verifyEmailSchema,
   updateProfileSchema,
 } from '../validators/auth.validator.js';
-import authController from '../controllers/auth.controller.js';
+import {
+  // Registration
+  register,
+  verifyRegistration,
+  resendRegistrationOTP,
+  socialAuth,
+  completeSocialProfile,
+  // Session
+  login,
+  logout,
+  refreshToken,
+  forgotPassword,
+  resetPassword,
+  verifyEmail,
+  // Onboarding
+  submitConsent,
+  enrollWhatsApp,
+  verifyWhatsApp,
+  skipWhatsApp,
+  getCurrentUser,
+  getOnboardingStatus,
+  updateProfile,
+} from '../controllers/auth/index.js';
 
 const router = Router();
 
@@ -30,7 +52,7 @@ router.post(
   '/register',
   authLimiter,
   validate(registerSchema),
-  authController.register
+  register
 );
 
 // S01.1.1: Core Account Registration - Step 2: Verify OTP and Create Account
@@ -38,7 +60,7 @@ router.post(
   '/verify-registration',
   authLimiter,
   validate(verifyRegistrationSchema),
-  authController.verifyRegistration
+  verifyRegistration
 );
 
 // Resend Registration OTP
@@ -46,7 +68,7 @@ router.post(
   '/resend-registration-otp',
   strictLimiter,
   validate(resendRegistrationOTPSchema),
-  authController.resendRegistrationOTP
+  resendRegistrationOTP
 );
 
 // S01.1.2: Social Sign-In (Google/Apple)
@@ -54,7 +76,7 @@ router.post(
   '/social',
   authLimiter,
   validate(socialAuthSchema),
-  authController.socialAuth
+  socialAuth
 );
 
 // Login
@@ -62,7 +84,15 @@ router.post(
   '/login',
   authLimiter,
   validate(loginSchema),
-  authController.login
+  login
+);
+
+// Refresh Token
+router.post(
+  '/refresh',
+  authLimiter,
+  verifyRefreshToken,
+  refreshToken
 );
 
 // Forgot Password
@@ -70,7 +100,7 @@ router.post(
   '/forgot-password',
   strictLimiter,
   validate(forgotPasswordSchema),
-  authController.forgotPassword
+  forgotPassword
 );
 
 // Reset Password
@@ -78,14 +108,14 @@ router.post(
   '/reset-password',
   strictLimiter,
   validate(resetPasswordSchema),
-  authController.resetPassword
+  resetPassword
 );
 
 // Verify Email
 router.post(
   '/verify-email',
   validate(verifyEmailSchema),
-  authController.verifyEmail
+  verifyEmail
 );
 
 // ============================================
@@ -97,7 +127,7 @@ router.post(
   '/complete-profile',
   authenticate,
   validate(completeSocialProfileSchema),
-  authController.completeSocialProfile
+  completeSocialProfile
 );
 
 // S01.1.3: Privacy Consent
@@ -105,7 +135,7 @@ router.post(
   '/consent',
   authenticate,
   validate(consentSchema),
-  authController.submitConsent
+  submitConsent
 );
 
 // WhatsApp Enrollment
@@ -114,7 +144,7 @@ router.post(
   authenticate,
   strictLimiter,
   validate(whatsAppEnrollmentSchema),
-  authController.enrollWhatsApp
+  enrollWhatsApp
 );
 
 // WhatsApp Verification
@@ -122,35 +152,40 @@ router.post(
   '/whatsapp/verify',
   authenticate,
   validate(whatsAppVerificationSchema),
-  authController.verifyWhatsApp
+  verifyWhatsApp
 );
 
 // Skip WhatsApp Enrollment
 router.post(
   '/whatsapp/skip',
   authenticate,
-  authController.skipWhatsApp
+  skipWhatsApp
 );
 
 // Logout
 router.post(
   '/logout',
   authenticate,
-  authController.logout
+  logout
 );
 
-// Get Current User
+// Get Current User (frequently polled - add lenient rate limiter and caching)
 router.get(
   '/me',
   authenticate,
-  authController.getCurrentUser
+  createRateLimiter({
+    windowMs: 60 * 1000, // 1 minute
+    max: 30, // 30 requests per minute per user
+    keyGenerator: 'user',
+  }),
+  getCurrentUser
 );
 
 // Get Onboarding Status
 router.get(
   '/onboarding-status',
   authenticate,
-  authController.getOnboardingStatus
+  getOnboardingStatus
 );
 
 // Update Profile
@@ -158,7 +193,7 @@ router.patch(
   '/profile',
   authenticate,
   validate(updateProfileSchema),
-  authController.updateProfile
+  updateProfile
 );
 
 export default router;

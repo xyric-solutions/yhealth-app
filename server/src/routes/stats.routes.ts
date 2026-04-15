@@ -35,10 +35,32 @@ router.get(
   statsController.getHealthMetrics
 );
 
+// Get enhanced health metrics with analytics
+router.get(
+  '/enhanced-health-metrics',
+  statsController.getEnhancedHealthMetrics
+);
+
 // Log quick action (workout, meal, sleep, mindfulness)
 router.post(
   '/quick-log',
   statsController.logQuickAction
+);
+
+// ============================================
+// Analytics & Reporting
+// ============================================
+
+// Get comprehensive analytics
+router.get(
+  '/analytics',
+  statsController.getAnalytics
+);
+
+// Get comprehensive report
+router.get(
+  '/report',
+  statsController.getReport
 );
 
 export default router;

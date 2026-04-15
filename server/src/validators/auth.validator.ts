@@ -33,7 +33,7 @@ const dateOfBirth = z.string()
       age--;
     }
     return age >= 18;
-  }, 'yHealth is for users 18+. Contact support@yhealth.com for assistance.');
+  }, 'Balencia is for users 18+. Contact support@balencia.com for assistance.');
 
 // S01.1.1: Core Account Registration
 export const registerSchema = z.object({

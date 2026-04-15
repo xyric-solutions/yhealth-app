@@ -3,7 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import type { NextAuthConfig } from "next-auth";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9090/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
 export const authConfig: NextAuthConfig = {
   providers: [
@@ -64,6 +64,7 @@ export const authConfig: NextAuthConfig = {
             accessToken: accessToken,
             refreshToken: refreshToken,
             onboardingStatus: user.onboardingStatus,
+            role: user.role || "user", // Include role from backend
           };
 
           if (process.env.NODE_ENV === "development") {
@@ -84,17 +85,21 @@ export const authConfig: NextAuthConfig = {
         }
       },
     }),
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          prompt: "consent",
-          access_type: "offline",
-          response_type: "code",
-        },
-      },
-    }),
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            authorization: {
+              params: {
+                prompt: "consent",
+                access_type: "offline",
+                response_type: "code",
+              },
+            },
+          }),
+        ]
+      : []),
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
@@ -152,6 +157,7 @@ export const authConfig: NextAuthConfig = {
         token.accessToken = user.accessToken || token.accessToken;
         token.refreshToken = user.refreshToken || token.refreshToken;
         token.onboardingStatus = user.onboardingStatus || token.onboardingStatus;
+        token.role = (user as { role?: string }).role || token.role || "user"; // Store role in token
 
         if (process.env.NODE_ENV === "development") {
           console.log("[NextAuth JWT] Set from user:", {
@@ -162,7 +168,7 @@ export const authConfig: NextAuthConfig = {
         // Handle Google sign-in - get tokens from backendData
         if (account?.provider === "google") {
           const backendData = (user as unknown as Record<string, unknown>).backendData as {
-            user: { id: string; onboardingStatus: string };
+            user: { id: string; onboardingStatus: string; role?: string };
             tokens: { accessToken: string; refreshToken: string };
           } | undefined;
 
@@ -171,6 +177,7 @@ export const authConfig: NextAuthConfig = {
             token.accessToken = backendData.tokens.accessToken;
             token.refreshToken = backendData.tokens.refreshToken;
             token.onboardingStatus = backendData.user.onboardingStatus;
+            token.role = backendData.user.role || token.role || "user"; // Store role from backend
 
             if (process.env.NODE_ENV === "development") {
               console.log("[NextAuth JWT] Set from Google backendData:", {
@@ -207,6 +214,8 @@ export const authConfig: NextAuthConfig = {
       session.accessToken = token.accessToken as string || "";
       session.refreshToken = token.refreshToken as string || "";
       session.onboardingStatus = token.onboardingStatus as string || "pending";
+      // Include role in session user object
+      (session.user as { role?: string }).role = (token.role as string) || "user";
 
       if (process.env.NODE_ENV === "development") {
         console.log("[NextAuth Session] Returning session:", {

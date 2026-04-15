@@ -4,12 +4,23 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { logger } from '../services/logger.service.js';
+import {
+  nutritionService,
+  safetyService,
+  type NutritionPlan,
+  type UserMetrics,
+  type GoalParameters,
+  type SafetyValidationResult,
+  type UserHealthData,
+} from '../services/index.js';
+import { notificationService } from '../services/notification.service.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 import type {
   GeneratePlanInput,
   UpdatePlanInput,
   LogActivityInput,
 } from '../validators/plan.validator.js';
+import { modelFactory } from '../services/model-factory.service.js';
 
 // Type definitions
 type GoalCategory = 'weight_loss' | 'muscle_building' | 'sleep_improvement' | 'stress_wellness' | 'energy_productivity' | 'event_training' | 'health_condition' | 'habit_building' | 'overall_optimization' | 'custom';
@@ -89,6 +100,31 @@ interface UserPreferencesRow {
   preferred_check_in_time: string;
 }
 
+interface BodyStats {
+  heightCm: number;
+  weightKg: number;
+  targetWeightKg?: number;
+  bodyFatPercentage?: number;
+}
+
+interface AssessmentResponseRow {
+  id: string;
+  user_id: string;
+  body_stats: BodyStats | null;
+  baseline_data: {
+    activityDaysPerWeek?: number;
+    sleepHoursPerNight?: number;
+    stressLevel?: number;
+    energyLevel?: number;
+  } | null;
+}
+
+interface UserRow {
+  id: string;
+  gender: 'male' | 'female' | 'non_binary' | 'prefer_not_to_say';
+  date_of_birth: Date | null;
+}
+
 // Activity interface for the plan
 interface IActivity {
   id: string;
@@ -147,6 +183,23 @@ export const generatePlan = asyncHandler(async (req: AuthenticatedRequest, res: 
   );
   const preferences = prefsResult.rows[0];
 
+  // Get user data for age and gender
+  const userResult = await query<UserRow>(
+    'SELECT id, gender, date_of_birth FROM users WHERE id = $1',
+    [userId]
+  );
+  const userData = userResult.rows[0];
+
+  // Get assessment body stats
+  const assessmentResult = await query<AssessmentResponseRow>(
+    `SELECT body_stats, baseline_data FROM assessment_responses
+     WHERE user_id = $1 AND is_complete = true
+     ORDER BY completed_at DESC LIMIT 1`,
+    [userId]
+  );
+  const bodyStats = assessmentResult.rows[0]?.body_stats;
+  const baselineData = assessmentResult.rows[0]?.baseline_data;
+
   // Check for existing active plan
   const existingPlanResult = await query<UserPlanRow>(
     `SELECT * FROM user_plans WHERE user_id = $1 AND goal_id = $2 AND status = 'active'`,
@@ -157,8 +210,93 @@ export const generatePlan = asyncHandler(async (req: AuthenticatedRequest, res: 
     throw ApiError.conflict('An active plan already exists for this goal. Set regenerate=true to replace it.');
   }
 
+  // Calculate nutrition plan and perform safety validation if we have body stats
+  let nutritionPlan: NutritionPlan | null = null;
+  let safetyValidation: SafetyValidationResult | null = null;
+
+  if (bodyStats && userData?.date_of_birth && userData?.gender) {
+    const ageYears = Math.floor(
+      (Date.now() - new Date(userData.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+    );
+
+    // Build health data for safety validation
+    const healthData: UserHealthData = {
+      age: ageYears,
+      gender: userData.gender,
+      weightKg: bodyStats.weightKg,
+      heightCm: bodyStats.heightCm,
+      bodyFatPercentage: bodyStats.bodyFatPercentage,
+    };
+
+    // Perform safety validation before generating plan
+    safetyValidation = safetyService.validateForPlanGeneration(healthData, {
+      goalType: goal.category,
+      targetWeightKg: bodyStats.targetWeightKg,
+      weeklyWeightChangeKg: data.weeklyWeightChangeKg,
+      activityLevel: nutritionService.activityDaysToLevel(baselineData?.activityDaysPerWeek ?? 3),
+    });
+
+    // Log safety validation results
+    logger.info('Safety validation completed', {
+      userId,
+      riskLevel: safetyValidation.riskLevel,
+      requiresDoctorConsult: safetyValidation.requiresDoctorConsult,
+      warningsCount: safetyValidation.warnings.length,
+    });
+
+    // Block plan generation for critical risk without acknowledgment
+    if (safetyValidation.riskLevel === 'critical' && !data.acknowledgedWarnings) {
+      const error = new ApiError(400,
+        'Your health profile requires medical consultation before proceeding. ' +
+        'Please review the safety warnings and acknowledge them, or consult a healthcare provider.',
+        {
+          code: 'SAFETY_VALIDATION_REQUIRED',
+          details: [
+            { code: 'SAFETY_DATA', message: JSON.stringify(safetyValidation), field: 'safetyValidation' },
+            { code: 'ACKNOWLEDGMENT_REQUIRED', message: 'true', field: 'requiresAcknowledgment' },
+          ],
+        }
+      );
+      throw error;
+    }
+
+    // Calculate nutrition plan
+    const metrics: UserMetrics = {
+      weightKg: bodyStats.weightKg,
+      heightCm: bodyStats.heightCm,
+      ageYears,
+      gender: userData.gender,
+      activityLevel: nutritionService.activityDaysToLevel(baselineData?.activityDaysPerWeek ?? 3),
+      bodyFatPercentage: bodyStats.bodyFatPercentage,
+    };
+
+    const goalParams: GoalParameters = {
+      goalType: nutritionService.goalCategoryToType(goal.category),
+      targetWeightKg: bodyStats.targetWeightKg,
+    };
+
+    nutritionPlan = nutritionService.generateNutritionPlan(metrics, goalParams);
+
+    // Validate nutrition plan safety
+    const nutritionSafetyCheck = nutritionService.validatePlanSafety(nutritionPlan, metrics);
+    if (!nutritionSafetyCheck.isSafe) {
+      logger.warn('Nutrition plan has safety warnings', {
+        userId,
+        issues: nutritionSafetyCheck.issues,
+      });
+      // Add nutrition issues to safety warnings
+      safetyValidation.warnings.push(...nutritionSafetyCheck.issues.map((issue) => ({
+        code: 'NUTRITION_SAFETY',
+        severity: 'moderate' as const,
+        message: issue,
+        recommendation: 'Consider adjusting your nutrition targets.',
+        requiresConsent: false,
+      })));
+    }
+  }
+
   // Generate the plan
-  const generatedPlan = await generateAIPlan(goal, preferences, data);
+  const generatedPlan = await generateAIPlan(goal, preferences, data, nutritionPlan);
 
   // Archive existing active plan if regenerating
   if (existingPlanResult.rows.length > 0) {
@@ -171,6 +309,14 @@ export const generatePlan = asyncHandler(async (req: AuthenticatedRequest, res: 
   // Create the plan
   const startDate = new Date();
   const endDate = new Date(startDate.getTime() + goal.duration_weeks * 7 * 24 * 60 * 60 * 1000);
+
+  // Prepare generation params with nutrition data
+  const generationParams = {
+    ...data,
+    nutritionPlan: generatedPlan.nutritionPlan,
+    safetyWarnings: generatedPlan.nutritionPlan?.safetyWarnings || [],
+    recommendations: generatedPlan.nutritionPlan?.recommendations || [],
+  };
 
   const planResult = await query<UserPlanRow>(
     `INSERT INTO user_plans (
@@ -197,7 +343,7 @@ export const generatePlan = asyncHandler(async (req: AuthenticatedRequest, res: 
       JSON.stringify(generatedPlan.weeklyFocuses),
       true,
       'gpt-4',
-      JSON.stringify(data),
+      JSON.stringify(generationParams),
       '[]',
       0,
       '[]',
@@ -221,11 +367,21 @@ export const generatePlan = asyncHandler(async (req: AuthenticatedRequest, res: 
     goalId: goal.id,
     planId: plan.id,
     activities: generatedPlan.activities.length,
+    hasNutritionPlan: !!generatedPlan.nutritionPlan,
   });
 
   ApiResponse.created(res, {
     plan: mapPlanRow(plan),
     message: generatedPlan.coachMessage,
+    nutritionPlan: generatedPlan.nutritionPlan,
+    safetyValidation: safetyValidation ? {
+      riskLevel: safetyValidation.riskLevel,
+      requiresDoctorConsult: safetyValidation.requiresDoctorConsult,
+      warnings: safetyValidation.warnings,
+      restrictions: safetyValidation.restrictions,
+      recommendations: safetyValidation.recommendations,
+      disclaimers: safetyValidation.disclaimers,
+    } : null,
   }, 'Plan generated successfully');
 });
 
@@ -251,7 +407,34 @@ export const getPlans = asyncHandler(async (req: AuthenticatedRequest, res: Resp
 
   const plansResult = await query<UserPlanRow>(queryText, params);
 
-  ApiResponse.success(res, { plans: plansResult.rows.map(mapPlanRow) });
+  // Get stats for all plans
+  const statsResult = await query<{
+    status: PlanStatus;
+    count: string;
+  }>(
+    `SELECT status, COUNT(*) as count FROM user_plans WHERE user_id = $1 GROUP BY status`,
+    [userId]
+  );
+
+  const stats = {
+    active: 0,
+    paused: 0,
+    completed: 0,
+    archived: 0,
+    draft: 0,
+  };
+
+  for (const row of statsResult.rows) {
+    if (row.status in stats) {
+      stats[row.status as keyof typeof stats] = parseInt(row.count, 10);
+    }
+  }
+
+  ApiResponse.success(res, {
+    plans: plansResult.rows.map(mapPlanRow),
+    total: plansResult.rows.length,
+    stats,
+  });
 });
 
 /**
@@ -500,6 +683,24 @@ export const logActivity = asyncHandler(async (req: AuthenticatedRequest, res: R
   // Update plan progress
   await updatePlanProgress(planId);
 
+  // Send notification for completed activities
+  if (data.status === 'completed') {
+    await notificationService.activityLogged(userId, activity.type, activity.title);
+
+    // Check for streak milestone
+    const streakResult = await query<{ streak_count: string }>(
+      `SELECT COUNT(DISTINCT scheduled_date) as streak_count
+       FROM activity_logs
+       WHERE plan_id = $1 AND status = 'completed'
+       AND scheduled_date >= CURRENT_DATE - INTERVAL '7 days'`,
+      [planId]
+    );
+    const streakDays = parseInt(streakResult.rows[0]?.streak_count || '0');
+    if ([3, 7, 14, 30].includes(streakDays)) {
+      await notificationService.streakMilestone(userId, streakDays, 'activity');
+    }
+  }
+
   logger.info('Activity logged', {
     userId,
     planId,
@@ -701,6 +902,9 @@ export const getTodayActivities = asyncHandler(async (req: AuthenticatedRequest,
     return timeA.localeCompare(timeB);
   });
 
+  // Determine if today is a rest day (no activities scheduled)
+  const isRestDay = todayActivities.length === 0;
+
   ApiResponse.success(res, {
     planId: plan.id,
     date: today,
@@ -708,6 +912,7 @@ export const getTodayActivities = asyncHandler(async (req: AuthenticatedRequest,
     activities: formattedActivities,
     completedCount: logsResult.rows.filter(l => l.status === 'completed').length,
     totalCount: todayActivities.length,
+    isRestDay,
   });
 });
 
@@ -783,13 +988,15 @@ function mapPlanRow(row: UserPlanRow) {
 async function generateAIPlan(
   goal: UserGoalRow,
   preferences: UserPreferencesRow | undefined,
-  _options: GeneratePlanInput
+  _options: GeneratePlanInput,
+  nutritionPlan: NutritionPlan | null = null
 ): Promise<{
   name: string;
   description: string;
   activities: IActivity[];
   weeklyFocuses: IWeeklyFocus[];
   coachMessage: string;
+  nutritionPlan: NutritionPlan | null;
 }> {
   const planName = `${goal.title} Plan`;
   const planDescription = `A ${goal.duration_weeks}-week plan to achieve ${goal.description.toLowerCase()}`;
@@ -906,12 +1113,22 @@ async function generateAIPlan(
   const style = preferences?.coaching_style || 'supportive';
   const coachMessage = coachMessages[style] || coachMessages['supportive'];
 
+  // Add nutrition-specific message if nutrition plan exists
+  let nutritionMessage = '';
+  if (nutritionPlan) {
+    nutritionMessage = `\n\nBased on your profile, I've calculated your daily nutrition targets: ${nutritionPlan.macros.calories} calories with ${nutritionPlan.macros.protein.grams}g protein, ${nutritionPlan.macros.carbohydrates.grams}g carbs, and ${nutritionPlan.macros.fat.grams}g fat.`;
+    if (nutritionPlan.safetyWarnings.length > 0) {
+      nutritionMessage += ' Note: Please review the safety considerations in your plan.';
+    }
+  }
+
   return {
     name: planName,
     description: planDescription,
     activities,
     weeklyFocuses,
-    coachMessage,
+    coachMessage: coachMessage + nutritionMessage,
+    nutritionPlan,
   };
 }
 
@@ -933,23 +1150,430 @@ async function generateActivityFeedback(
   return feedbackOptions[Math.floor(Math.random() * feedbackOptions.length)];
 }
 
+// Note: updatePlanProgress is now in plan-activities.controller.ts
+// This function is kept for backward compatibility but should use the one from plan-activities
 async function updatePlanProgress(planId: string): Promise<void> {
-  const logsResult = await query<ActivityLogRow>(
-    'SELECT * FROM activity_logs WHERE plan_id = $1',
+  // Import and use the updated function from plan-activities controller
+  // For now, we'll use a simplified version that matches the new logic
+  const planResult = await query<UserPlanRow>(
+    'SELECT * FROM user_plans WHERE id = $1',
     [planId]
   );
 
-  const logs = logsResult.rows;
-  if (logs.length === 0) return;
+  if (planResult.rows.length === 0) return;
 
-  const completed = logs.filter(l => l.status === 'completed').length;
-  const overallProgress = Math.round((completed / logs.length) * 100);
+  const plan = planResult.rows[0];
+  const activities = (plan.activities as IActivity[]) || [];
+
+  if (activities.length === 0) return;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const startDate = plan.start_date instanceof Date
+    ? plan.start_date
+    : new Date(plan.start_date);
+  const endDate = plan.end_date instanceof Date
+    ? plan.end_date
+    : new Date(plan.end_date);
+
+  const calculateToDate = today < endDate ? today : endDate;
+
+  // Calculate total scheduled (simplified - count all days from start to end)
+  // This is a simplified version - the full version is in plan-activities.controller.ts
+  let totalScheduled = 0;
+  const dayOfWeekMap: Record<DayOfWeek, number> = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+
+  const currentDate = new Date(startDate);
+  while (currentDate <= calculateToDate) {
+    const dayOfWeek = currentDate.getDay();
+    const dayName = Object.keys(dayOfWeekMap).find(
+      (key) => dayOfWeekMap[key as DayOfWeek] === dayOfWeek
+    ) as DayOfWeek;
+
+    for (const activity of activities) {
+      if (dayName && activity.daysOfWeek.includes(dayName)) {
+        totalScheduled++;
+      }
+    }
+
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  const logsResult = await query<ActivityLogRow>(
+    `SELECT * FROM activity_logs 
+     WHERE plan_id = $1 
+     AND scheduled_date >= $2 
+     AND scheduled_date <= $3`,
+    [planId, startDate, calculateToDate]
+  );
+
+  const completed = logsResult.rows.filter(l => l.status === 'completed').length;
+  const overallProgress = totalScheduled > 0
+    ? Math.round((completed / totalScheduled) * 100)
+    : 0;
 
   await query(
     'UPDATE user_plans SET overall_progress = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
     [overallProgress, planId]
   );
 }
+
+/**
+ * Safety Preview
+ * POST /api/plans/safety-preview
+ * Preview safety validation without generating a plan
+ */
+export const getSafetyPreview = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw ApiError.unauthorized();
+
+  // Get user data
+  const userResult = await query<UserRow>(
+    'SELECT id, gender, date_of_birth FROM users WHERE id = $1',
+    [userId]
+  );
+  const userData = userResult.rows[0];
+
+  // Get assessment body stats
+  const assessmentResult = await query<AssessmentResponseRow>(
+    `SELECT body_stats, baseline_data FROM assessment_responses
+     WHERE user_id = $1 AND is_complete = true
+     ORDER BY completed_at DESC LIMIT 1`,
+    [userId]
+  );
+  const bodyStats = assessmentResult.rows[0]?.body_stats;
+  const baselineData = assessmentResult.rows[0]?.baseline_data;
+
+  if (!bodyStats || !userData?.date_of_birth || !userData?.gender) {
+    throw ApiError.badRequest('Complete assessment required for safety preview');
+  }
+
+  const ageYears = Math.floor(
+    (Date.now() - new Date(userData.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+  );
+
+  // Build health data for safety validation
+  const healthData: UserHealthData = {
+    age: ageYears,
+    gender: userData.gender,
+    weightKg: bodyStats.weightKg,
+    heightCm: bodyStats.heightCm,
+    bodyFatPercentage: bodyStats.bodyFatPercentage,
+  };
+
+  // Get goal category from request or use default
+  const { goalCategory, targetWeightKg, weeklyWeightChangeKg } = req.body;
+
+  // Perform safety validation
+  const safetyValidation = safetyService.validateForPlanGeneration(healthData, {
+    goalType: goalCategory || 'maintenance',
+    targetWeightKg: targetWeightKg || bodyStats.targetWeightKg,
+    weeklyWeightChangeKg,
+    activityLevel: nutritionService.activityDaysToLevel(baselineData?.activityDaysPerWeek ?? 3),
+  });
+
+  // Calculate BMI for display
+  const bmi = safetyService.calculateBMI(bodyStats.weightKg, bodyStats.heightCm);
+
+  ApiResponse.success(res, {
+    healthProfile: {
+      age: ageYears,
+      gender: userData.gender,
+      weightKg: bodyStats.weightKg,
+      heightCm: bodyStats.heightCm,
+      bmi,
+      bmiCategory: safetyService.getBMICategory(bmi),
+    },
+    safetyValidation: {
+      isApproved: safetyValidation.isApproved,
+      riskLevel: safetyValidation.riskLevel,
+      requiresDoctorConsult: safetyValidation.requiresDoctorConsult,
+      warnings: safetyValidation.warnings,
+      restrictions: safetyValidation.restrictions,
+      recommendations: safetyValidation.recommendations,
+      disclaimers: safetyValidation.disclaimers,
+    },
+    requiredConsents: safetyService.getRequiredConsents(safetyValidation.warnings),
+  }, 'Safety preview generated');
+});
+
+/**
+ * Create Manual Plan
+ * POST /api/plans/create-manual
+ * Create a custom plan with user-defined tasks
+ */
+export const createManualPlan = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw ApiError.unauthorized();
+
+  const { name, description, pillar, goalCategory, durationWeeks, activities } = req.body;
+
+  if (!name || !pillar || !activities || activities.length === 0) {
+    throw ApiError.badRequest('Name, pillar, and at least one activity are required');
+  }
+
+  // Validate activities
+  const validatedActivities: IActivity[] = activities.map((a: Partial<IActivity>, index: number) => ({
+    id: a.id || `act_${Date.now()}_${index}`,
+    type: a.type || 'habit',
+    title: a.title || `Task ${index + 1}`,
+    description: a.description || '',
+    targetValue: a.targetValue,
+    targetUnit: a.targetUnit,
+    daysOfWeek: a.daysOfWeek || ['monday', 'wednesday', 'friday'],
+    preferredTime: a.preferredTime || '09:00',
+    duration: a.duration,
+    isOptional: a.isOptional || false,
+    instructions: a.instructions,
+  }));
+
+  // Create the plan
+  const startDate = new Date();
+  const weeks = durationWeeks || 4;
+  const endDate = new Date(startDate.getTime() + weeks * 7 * 24 * 60 * 60 * 1000);
+  const category = goalCategory || 'custom';
+
+  // First create a goal for this manual plan (required by database schema)
+  const goalResult = await query<UserGoalRow>(
+    `INSERT INTO user_goals (
+      user_id, category, pillar, title, description,
+      target_value, target_unit, current_value, start_value,
+      start_date, target_date, duration_weeks,
+      motivation, confidence_level, status, progress,
+      is_safety_checked, ai_suggested
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+    RETURNING *`,
+    [
+      userId,
+      category,
+      pillar,
+      name,
+      description || `Custom ${pillar} plan`,
+      100, 
+      'percent',
+      0, // current_value
+      0, // start_value
+      startDate,
+      endDate,
+      weeks,
+      'Build better habits', // motivation
+      7, // confidence_level (1-10)
+      'active',
+      0, // progress
+      true, // is_safety_checked (manual plans bypass safety)
+      false, // ai_suggested
+    ]
+  );
+
+  const goalId = goalResult.rows[0]?.id;
+  if (!goalId) {
+    throw ApiError.internal('Failed to create goal for plan');
+  }
+
+  // Generate weekly focuses with progressive themes and task-specific content
+  const weeklyFocuses: IWeeklyFocus[] = [];
+  const taskTitles = validatedActivities.map(a => a.title).join(', ');
+
+  const weeklyThemes = [
+    { theme: 'Getting Started', focus: 'Establish your routine', outcome: 'Build initial momentum' },
+    { theme: 'Building Foundation', focus: 'Strengthen daily habits', outcome: 'Develop consistency' },
+    { theme: 'Gaining Momentum', focus: 'Increase engagement', outcome: 'See early progress' },
+    { theme: 'Deepening Practice', focus: 'Refine your approach', outcome: 'Build confidence' },
+    { theme: 'Mid-Point Check', focus: 'Assess and adjust', outcome: 'Optimize your routine' },
+    { theme: 'Pushing Forward', focus: 'Challenge yourself', outcome: 'Break through plateaus' },
+    { theme: 'Building Resilience', focus: 'Stay committed', outcome: 'Strengthen discipline' },
+    { theme: 'Mastering Habits', focus: 'Perfect your routine', outcome: 'Achieve mastery' },
+    { theme: 'Sustaining Progress', focus: 'Maintain momentum', outcome: 'Lock in gains' },
+    { theme: 'Preparing to Finish', focus: 'Final push', outcome: 'Reach your goals' },
+    { theme: 'Completion Phase', focus: 'Celebrate progress', outcome: 'Solidify achievements' },
+    { theme: 'Beyond the Plan', focus: 'Plan for continuation', outcome: 'Lasting transformation' },
+  ];
+
+  for (let week = 1; week <= Math.min(weeks, 12); week++) {
+    const themeData = weeklyThemes[week - 1] || weeklyThemes[weeklyThemes.length - 1];
+    weeklyFocuses.push({
+      week,
+      theme: `Week ${week}: ${themeData.theme}`,
+      focus: `${themeData.focus} with: ${taskTitles}`,
+      expectedOutcome: themeData.outcome,
+      activities: validatedActivities.map(a => a.id),
+    });
+  }
+
+  const planResult = await query<UserPlanRow>(
+    `INSERT INTO user_plans (
+      user_id, goal_id, name, description, pillar, goal_category,
+      start_date, end_date, duration_weeks, current_week,
+      status, activities, weekly_focuses,
+      ai_generated, user_adjustments,
+      overall_progress, weekly_completion_rates
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+    RETURNING *`,
+    [
+      userId,
+      goalId,
+      name,
+      description || '',
+      pillar,
+      category,
+      startDate,
+      endDate,
+      weeks,
+      1,
+      'active',
+      JSON.stringify(validatedActivities),
+      JSON.stringify(weeklyFocuses),
+      false,
+      '[]',
+      0,
+      '[]',
+    ]
+  );
+
+  const plan = planResult.rows[0];
+
+  // Send notification
+  await notificationService.planUpdated(userId, plan.id, name, true);
+
+  logger.info('Manual plan created', {
+    userId,
+    planId: plan.id,
+    activities: validatedActivities.length,
+  });
+
+  ApiResponse.created(res, {
+    plan: mapPlanRow(plan),
+    message: 'Your custom plan is ready! Start completing your tasks.',
+  }, 'Plan created successfully');
+});
+
+/**
+ * Generate AI Tasks
+ * POST /api/plans/generate-tasks
+ * Use AI to generate relevant tasks based on user goals
+ */
+export const generateAITasks = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw ApiError.unauthorized();
+
+  const { goalDescription, pillar, goalCategory, durationWeeks } = req.body;
+
+  if (!goalDescription) {
+    throw ApiError.badRequest('Goal description is required');
+  }
+
+  // Use AI to generate tasks
+  const llm = modelFactory.getModel({
+    tier: 'default',
+  });
+
+  const prompt = `You are an expert health and fitness coach. Based on the user's goal, generate a structured plan with specific, actionable tasks.
+
+User Goal: ${goalDescription}
+Health Pillar: ${pillar || 'fitness'}
+Goal Category: ${goalCategory || 'habit_building'}
+Duration: ${durationWeeks || 4} weeks
+
+Generate a JSON response with the following structure:
+{
+  "planName": "Short descriptive name for the plan",
+  "planDescription": "Brief description of what the plan will help achieve",
+  "tasks": [
+    {
+      "id": "task_1",
+      "title": "Task title",
+      "description": "Brief description",
+      "type": "workout|meal|sleep_routine|mindfulness|habit|check_in|reflection|learning",
+      "daysOfWeek": ["monday", "wednesday", "friday"],
+      "preferredTime": "09:00",
+      "duration": 30
+    }
+  ]
+}
+
+Generate 4-7 tasks that are:
+1. Specific and actionable
+2. Realistic and achievable
+3. Aligned with the user's goal
+4. Properly scheduled throughout the week
+
+Respond ONLY with valid JSON, no additional text.`;
+
+  try {
+    const response = await llm.invoke(prompt);
+    const content = typeof response.content === 'string' ? response.content : '';
+
+    // Parse the JSON response
+    const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
+    const parsed = JSON.parse(cleanedContent);
+
+    // Validate and format tasks
+    const tasks = (parsed.tasks || []).map((t: Record<string, unknown>, index: number) => ({
+      id: `task_${Date.now()}_${index}`,
+      title: t.title || `Task ${index + 1}`,
+      description: t.description || '',
+      type: t.type || 'habit',
+      daysOfWeek: t.daysOfWeek || ['monday', 'wednesday', 'friday'],
+      preferredTime: t.preferredTime || '09:00',
+      duration: t.duration || 30,
+    }));
+
+    logger.info('AI tasks generated', { userId, tasksCount: tasks.length });
+
+    ApiResponse.success(res, {
+      planName: parsed.planName || 'Your Custom Plan',
+      planDescription: parsed.planDescription || goalDescription,
+      tasks,
+    }, 'Tasks generated successfully');
+  } catch (error) {
+    logger.error('Failed to generate AI tasks', { userId, error });
+
+    // Return default tasks as fallback
+    const defaultTasks = [
+      {
+        id: `task_${Date.now()}_0`,
+        title: 'Daily Check-in',
+        description: 'Track your progress and mood',
+        type: 'check_in',
+        daysOfWeek: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+        preferredTime: '09:00',
+        duration: 5,
+      },
+      {
+        id: `task_${Date.now()}_1`,
+        title: 'Main Activity',
+        description: 'Primary activity toward your goal',
+        type: pillar === 'fitness' ? 'workout' : pillar === 'nutrition' ? 'meal' : 'mindfulness',
+        daysOfWeek: ['monday', 'wednesday', 'friday'],
+        preferredTime: '10:00',
+        duration: 30,
+      },
+      {
+        id: `task_${Date.now()}_2`,
+        title: 'Weekly Reflection',
+        description: 'Review progress and plan ahead',
+        type: 'reflection',
+        daysOfWeek: ['sunday'],
+        preferredTime: '18:00',
+        duration: 15,
+      },
+    ];
+
+    ApiResponse.success(res, {
+      planName: 'Your Custom Plan',
+      planDescription: goalDescription,
+      tasks: defaultTasks,
+    }, 'Default tasks generated');
+  }
+});
 
 export default {
   generatePlan,
@@ -959,6 +1583,8 @@ export default {
   getPlanById,
   getPlan: getPlanById,
   createPlan: generatePlan,
+  createManualPlan,
+  generateAITasks,
   activatePlan: updatePlan,
   updatePlan,
   logActivity,
@@ -968,4 +1594,5 @@ export default {
   getWeeklySummary,
   getTodayActivities,
   completeOnboarding,
+  getSafetyPreview,
 };

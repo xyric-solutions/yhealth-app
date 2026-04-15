@@ -123,7 +123,7 @@ export const updateGoalSchema = z.object({
   currentValue: z.number().optional(),
   targetDate: z.string().or(z.date()).optional(),
   motivation: z.string().min(10).max(500).optional(),
-  status: z.enum(['active', 'paused', 'completed', 'abandoned']).optional(),
+  status: z.enum(['active', 'in_progress', 'paused', 'completed', 'abandoned']).optional(),
 });
 
 // Delete goals schema (bulk delete)

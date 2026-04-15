@@ -1,7 +1,6 @@
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { env } from './env.config.js';
 import { logger } from '../services/logger.service.js';
-import { autoMigrate } from '../database/auto-migrate.js';
 
 interface ConnectionOptions {
   maxRetries?: number;
@@ -11,17 +10,36 @@ interface ConnectionOptions {
   onDisconnected?: () => void;
 }
 
-// Database configuration from environment variables
-const dbConfig = {
-  host: process.env['DB_HOST'] || 'localhost',
-  port: parseInt(process.env['DB_PORT'] || '5432', 10),
-  database: process.env['DB_NAME'] || 'yhealth',
-  user: process.env['DB_USER'] || 'postgres',
-  password: process.env['DB_PASSWORD'] || '',
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-};
+// Parse DATABASE_URL into individual connection params
+function parseConnectionString(url: string) {
+  const parsed = new URL(url);
+  return {
+    host: parsed.hostname,
+    port: parseInt(parsed.port || '5432', 10),
+    database: parsed.pathname.slice(1),
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+  };
+}
+
+// Database configuration - prefer DATABASE_URL, fall back to individual vars
+const dbConfig = process.env['DATABASE_URL']
+  ? {
+      ...parseConnectionString(process.env['DATABASE_URL']),
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: parseInt(process.env['DB_CONNECTION_TIMEOUT_MS'] || '10000', 10),
+    }
+  : {
+      host: process.env['DB_HOST'] || 'localhost',
+      port: parseInt(process.env['DB_PORT'] || '5432', 10),
+      database: process.env['DB_NAME'] || 'balencia',
+      user: process.env['DB_USER'] || 'postgres',
+      password: process.env['DB_PASSWORD'] || '',
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: parseInt(process.env['DB_CONNECTION_TIMEOUT_MS'] || '10000', 10),
+    };
 
 class DatabaseConnection {
   private static instance: DatabaseConnection;
@@ -49,9 +67,11 @@ class DatabaseConnection {
   }
 
   private setupEventHandlers(): void {
-    // Log connections
-    this.pool.on('connect', () => {
-      logger.debug('New PostgreSQL client connected');
+    // Log connections and set timezone to UTC for consistent timestamps
+    this.pool.on('connect', async (client) => {
+      // Set timezone to UTC to ensure all timestamps are stored consistently
+      await client.query("SET timezone = 'UTC'");
+      logger.debug('New PostgreSQL client connected (timezone set to UTC)');
     });
 
     // Log errors
@@ -112,25 +132,10 @@ class DatabaseConnection {
         timestamp: result.rows[0].now,
       });
 
-      // Auto-migrate missing tables
-      try {
-        const migrationResult = await autoMigrate();
-        if (migrationResult.success) {
-          if (migrationResult.tablesCreated.length > 0) {
-            logger.info('Auto-migration completed', {
-              tablesCreated: migrationResult.tablesCreated,
-              totalTables: migrationResult.existingTables.length,
-            });
-          }
-        } else {
-          logger.warn('Auto-migration completed with issues');
-        }
-      } catch (migrationError) {
-        logger.error('Auto-migration failed', {
-          error: migrationError instanceof Error ? migrationError.message : 'Unknown error'
-        });
-        // Don't throw - allow server to continue even if migration fails
-      }
+      // Note: Database migrations should be run manually via:
+      // - npm run db:setup (for full schema setup)
+      // - Custom migration scripts (for incremental migrations)
+      // Auto-migration is disabled to prevent unexpected schema changes on startup
 
       return this.pool;
     } catch (error) {
@@ -230,7 +235,29 @@ class DatabaseConnection {
       }
       return result;
     } catch (error) {
-      logger.error('Query error', { text: text.substring(0, 100), error: (error as Error).message });
+      const errorMessage = (error as Error).message;
+      const errorCode = (error as any)?.code;
+      
+      // Check if this is a known pgvector missing error (non-critical, has fallback)
+      const isVectorExtensionError = 
+        errorCode === '42704' || // type does not exist
+        errorCode === '58P01' || // extension not available
+        errorCode === '0A000' || // feature not supported (extension not available)
+        errorMessage?.includes('type "vector" does not exist') ||
+        errorMessage?.includes('extension "vector" is not available') ||
+        errorMessage?.includes('extension "vector" does not exist') ||
+        (errorMessage?.includes('vector') && errorMessage?.includes('does not exist')) ||
+        (errorMessage?.includes('extension') && errorMessage?.includes('not available'));
+      
+      if (isVectorExtensionError) {
+        // Log as debug instead of error since we have fallback handling
+        logger.debug('Query error (pgvector extension not available, fallback will be used)', { 
+          text: text.substring(0, 100), 
+          error: errorMessage 
+        });
+      } else {
+        logger.error('Query error', { text: text.substring(0, 100), error: errorMessage });
+      }
       throw error;
     }
   }
@@ -240,6 +267,8 @@ class DatabaseConnection {
    */
   public async getClient(): Promise<PoolClient> {
     const client = await this.pool.connect();
+    // Ensure timezone is set to UTC for this client
+    await client.query("SET timezone = 'UTC'");
     return client;
   }
 
@@ -251,6 +280,8 @@ class DatabaseConnection {
   ): Promise<T> {
     const client = await this.pool.connect();
     try {
+      // Ensure timezone is set to UTC for this transaction
+      await client.query("SET timezone = 'UTC'");
       await client.query('BEGIN');
       const result = await callback(client);
       await client.query('COMMIT');

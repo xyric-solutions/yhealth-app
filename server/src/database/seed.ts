@@ -76,6 +76,18 @@ async function seed() {
     );
     console.log('✅ Onboarding status updated to assessment_pending');
 
+    // Assign admin role
+    const ADMIN_ROLE_ID = '11111111-1111-1111-1111-111111111102';
+    await query(
+      'UPDATE users SET role_id = $1 WHERE id = $2',
+      [ADMIN_ROLE_ID, userId]
+    );
+    await query(
+      'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [userId, ADMIN_ROLE_ID]
+    );
+    console.log('✅ Admin role assigned');
+
     console.log('\n🎉 Seed completed successfully!');
     console.log('\n📋 Test User Credentials:');
     console.log('   Email: salman@xyric.ai');

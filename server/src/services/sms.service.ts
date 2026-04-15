@@ -103,7 +103,7 @@ class SMSService {
     });
 
     // Send SMS
-    const message = `Your yHealth verification code is: ${code}. Valid for 10 minutes.`;
+    const message = `Your Balencia verification code is: ${code}. Valid for 10 minutes.`;
     const sent = await this.sendSMS({ to: formattedPhone, message });
 
     if (!sent) {

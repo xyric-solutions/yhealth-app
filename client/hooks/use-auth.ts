@@ -103,13 +103,13 @@ export function useAuth() {
           }
 
           // Sign in with NextAuth to create session
-          const signInResult = await signIn("credentials", {
+          const _signInResult = await signIn("credentials", {
             email: response.data.user.email,
             // Use a special marker that the backend can recognize
             redirect: false,
           });
 
-          toast.success("Account created successfully! Welcome to yHealth!");
+          toast.success("Account created successfully! Welcome to Balencia!");
           router.push("/dashboard");
           return true;
         }
@@ -211,7 +211,7 @@ export function useAuth() {
 
     try {
       await signIn("google", { callbackUrl: "/dashboard" });
-    } catch (err) {
+    } catch (_err) {
       const message = "Google sign in failed. Please try again.";
       setError(message);
       toast.error(message);
@@ -225,7 +225,7 @@ export function useAuth() {
     try {
       await signOut({ callbackUrl: "/" });
       toast.success("Signed out successfully");
-    } catch (err) {
+    } catch (_err) {
       toast.error("Failed to sign out");
     } finally {
       setIsLoading(false);

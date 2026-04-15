@@ -1,12 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useState, useEffect, useCallback } from "react";
 import {
   User,
-  Mail,
+
   Phone,
   Calendar,
-  MapPin,
+
   Edit3,
   Camera,
   Trophy,
@@ -17,12 +18,40 @@ import {
   Star,
   Award,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/app/context/AuthContext";
+import { api } from "@/lib/api-client";
 
 export function ProfileTab() {
   const { user, getInitials, getDisplayName } = useAuth();
+  const [achievementLevel, setAchievementLevel] = useState<{ level: number; totalXP: number; levelName: string } | null>(null);
+  const [loadingLevel, setLoadingLevel] = useState(true);
+
+  const fetchAchievementLevel = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await api.get<{ level: number; totalXP: number }>("/achievements/summary");
+      if (res.success && res.data) {
+        const level = res.data.level || 1;
+        const levelName = level < 5 ? "Beginner" : level < 10 ? "Explorer" : level < 20 ? "Achiever" : level < 50 ? "Champion" : "Legend";
+        setAchievementLevel({
+          level,
+          totalXP: res.data.totalXP || 0,
+          levelName,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to fetch achievement level:", err);
+    } finally {
+      setLoadingLevel(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchAchievementLevel();
+  }, [fetchAchievementLevel]);
 
   if (!user) {
     return (
@@ -65,6 +94,7 @@ export function ProfileTab() {
             <div className="relative">
               <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-3xl sm:text-4xl font-bold shadow-lg">
                 {user.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={user.avatarUrl}
                     alt={getDisplayName()}
@@ -106,10 +136,22 @@ export function ProfileTab() {
                     {user.phone}
                   </span>
                 )}
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/20 text-sm text-green-400">
-                  <Star className="w-4 h-4" />
-                  Level 5
-                </span>
+                {loadingLevel ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/20 text-sm text-green-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading...
+                  </span>
+                ) : achievementLevel ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-sm text-amber-400 border border-amber-500/30">
+                    <Star className="w-4 h-4" />
+                    Level {achievementLevel.level} ({achievementLevel.levelName})
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/20 text-sm text-green-400">
+                    <Star className="w-4 h-4" />
+                    Level 1
+                  </span>
+                )}
               </div>
             </div>
 

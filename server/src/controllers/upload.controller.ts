@@ -33,6 +33,7 @@ export const uploadFile = asyncHandler(
     const validTypes: FileType[] = [
       "image",
       "avatar",
+      "blog",
       "document",
       "audio",
       "video",
@@ -61,11 +62,12 @@ export const uploadFile = asyncHandler(
       data: {
         key: result.key,
         encodedKey: encodeKey(result.key),
-        url: result.url,
-        publicUrl: result.publicUrl,
+        url: result.url, // Presigned URL (expires) - for temporary access
+        publicUrl: result.publicUrl || result.url, // Public URL (permanent if configured) - use this for avatars stored in database
         size: result.size,
         mimeType: result.mimeType,
         originalName: result.originalName,
+        // NOTE: For avatar uploads, always use publicUrl when saving to database to avoid expiration
       },
     });
   }
@@ -93,6 +95,7 @@ export const uploadMultipleFiles = asyncHandler(
     const validTypes: FileType[] = [
       "image",
       "avatar",
+      "blog",
       "document",
       "audio",
       "video",
@@ -155,6 +158,7 @@ export const getPresignedUrl = asyncHandler(
     const validTypes: FileType[] = [
       "image",
       "avatar",
+      "blog",
       "document",
       "audio",
       "video",
@@ -359,6 +363,72 @@ export const uploadAvatar = asyncHandler(
     res.status(201).json({
       success: true,
       message: "Avatar uploaded successfully",
+      data: {
+        key: result.key,
+        url: result.url, // Presigned URL (expires) - use publicUrl for permanent access
+        publicUrl: result.publicUrl || result.url, // Public URL (permanent) - use this for storing in database
+        // IMPORTANT: For avatars, always use publicUrl when saving to database to avoid expiration
+      },
+    });
+  }
+);
+
+/**
+ * Upload voice assistant avatar
+ * POST /api/upload/voice-assistant-avatar
+ * Uploads avatar and updates user preferences
+ */
+export const uploadVoiceAssistantAvatar = asyncHandler(
+  async (req: AuthFileRequest, res: Response) => {
+    const file = req.file;
+    const userId = req.user?.userId;
+
+    if (!file) {
+      throw ApiError.badRequest("No file provided");
+    }
+
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw ApiError.badRequest("Invalid file type. Allowed: JPEG, PNG, WebP");
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      throw ApiError.badRequest("File too large. Maximum size is 5MB");
+    }
+
+    if (!r2Service.isR2Configured()) {
+      throw ApiError.internal("File storage service not configured");
+    }
+
+    // Upload to R2
+    const result = await r2Service.upload(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      {
+        fileType: "avatar",
+        userId,
+        isPublic: true,
+      }
+    );
+
+    // Update user preferences with the avatar URL
+    const { query } = await import("../database/pg.js");
+    // Convert undefined to null for PostgreSQL query
+    const publicUrlValue: string | null = result.publicUrl ?? null;
+    await query(
+      `UPDATE user_preferences 
+       SET voice_assistant_avatar_url = $1, updated_at = CURRENT_TIMESTAMP 
+       WHERE user_id = $2`,
+      [publicUrlValue, userId] as (string | number | boolean | null | Date | object)[]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Voice assistant avatar uploaded successfully",
       data: {
         key: result.key,
         url: result.url,

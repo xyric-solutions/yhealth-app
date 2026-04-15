@@ -1,0 +1,14 @@
+<%# Unsubscribe Footer — include in all non-transactional emails %>
+<% if (typeof unsubscribeUrl !== 'undefined' && unsubscribeUrl) { %>
+<tr>
+  <td align="center" style="padding: 24px 20px 12px; border-top: 1px solid #e5e7eb;">
+    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #9ca3af;">
+      You're receiving this because you signed up for yHealth.
+      <br/>
+      <a href="<%= unsubscribeUrl %>" style="color: #9ca3af; text-decoration: underline;">Unsubscribe</a>
+      &nbsp;|&nbsp;
+      <a href="<%= appUrl || 'https://yhealth.app' %>/settings" style="color: #9ca3af; text-decoration: underline;">Email Preferences</a>
+    </p>
+  </td>
+</tr>
+<% } %>

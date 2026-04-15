@@ -1,11 +1,18 @@
 /**
  * Auth API Integration Tests
+ *
+ * Note: Registration is a 2-step OTP flow:
+ * 1. POST /register → sends OTP to email, returns activationToken
+ * 2. POST /verify-registration → verifies OTP, creates account
+ *
+ * We test step 1 and validation. For login/me/consent/refresh/logout,
+ * we use createTestUser/createAuthenticatedUser which insert directly into DB.
  */
 
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
-import { User } from '../../src/models/user.model.js';
-import { generateUserData, createAuthenticatedUser } from '../helpers/testUtils.js';
+import { query } from '../../src/database/pg.js';
+import { generateUserData, createTestUser, createAuthenticatedUser } from '../helpers/testUtils.js';
 import type { Application } from 'express';
 
 describe('Auth API Integration Tests', () => {
@@ -18,67 +25,49 @@ describe('Auth API Integration Tests', () => {
   describe('POST /api/auth/register', () => {
     const endpoint = '/api/auth/register';
 
-    it('should register a new user successfully', async () => {
-      const userData = {
-        email: 'newuser@example.com',
-        password: 'SecurePass123!',
-        firstName: 'John',
-        lastName: 'Doe',
-        dateOfBirth: '1990-05-15',
-        gender: 'male',
-      };
+    it('should start registration and return activation token', async () => {
+      const userData = generateUserData({
+        email: `register-${Date.now()}@example.com`,
+      });
 
       const response = await request(app)
         .post(endpoint)
         .send(userData)
-        .expect(201);
+        .expect((res) => {
+          expect([200, 201]).toContain(res.status);
+        });
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('user');
-      expect(response.body.data).toHaveProperty('tokens');
-      expect(response.body.data.user.email).toBe(userData.email.toLowerCase());
-      expect(response.body.data.user).not.toHaveProperty('password');
+      expect(response.body.data).toHaveProperty('activationToken');
     });
 
     it('should return validation error for invalid email', async () => {
-      const userData = {
-        email: 'invalid-email',
-        password: 'SecurePass123!',
-        firstName: 'John',
-        lastName: 'Doe',
-        dateOfBirth: '1990-05-15',
-        gender: 'male',
-      };
-
       const response = await request(app)
         .post(endpoint)
-        .send(userData)
+        .send({
+          email: 'invalid-email',
+          password: 'SecurePass123!',
+          firstName: 'John',
+          lastName: 'Doe',
+          dateOfBirth: '1990-05-15',
+          gender: 'male',
+        })
         .expect(400);
 
       expect(response.body.success).toBe(false);
     });
 
     it('should return 409 for duplicate email', async () => {
-      const email = 'duplicate@example.com';
+      // Create a user directly in DB first
+      const existingUser = await createTestUser({
+        email: `dup-${Date.now()}@example.com`,
+      });
 
-      // Create first user
-      await request(app)
-        .post(endpoint)
-        .send({
-          email,
-          password: 'SecurePass123!',
-          firstName: 'First',
-          lastName: 'User',
-          dateOfBirth: '1990-05-15',
-          gender: 'male',
-        })
-        .expect(201);
-
-      // Try to create second user with same email
+      // Try to register with the same email
       const response = await request(app)
         .post(endpoint)
         .send({
-          email,
+          email: existingUser.email,
           password: 'SecurePass123!',
           firstName: 'Second',
           lastName: 'User',
@@ -88,14 +77,13 @@ describe('Auth API Integration Tests', () => {
         .expect(409);
 
       expect(response.body.success).toBe(false);
-      expect(response.body.message).toContain('already');
     });
 
     it('should reject weak password', async () => {
       const response = await request(app)
         .post(endpoint)
         .send({
-          email: 'test@example.com',
+          email: `weakpwd-${Date.now()}@example.com`,
           password: '123',
           firstName: 'John',
           lastName: 'Doe',
@@ -110,26 +98,21 @@ describe('Auth API Integration Tests', () => {
 
   describe('POST /api/auth/login', () => {
     const endpoint = '/api/auth/login';
+    let testEmail: string;
 
-    beforeEach(async () => {
-      // Create a test user before each login test
-      await request(app)
-        .post('/api/auth/register')
-        .send({
-          email: 'loginuser@example.com',
-          password: 'SecurePass123!',
-          firstName: 'Login',
-          lastName: 'User',
-          dateOfBirth: '1990-05-15',
-          gender: 'male',
-        });
+    beforeAll(async () => {
+      testEmail = `login-${Date.now()}@example.com`;
+      await createTestUser({
+        email: testEmail,
+        password: 'SecurePass123!',
+      });
     });
 
     it('should login with valid credentials', async () => {
       const response = await request(app)
         .post(endpoint)
         .send({
-          email: 'loginuser@example.com',
+          email: testEmail,
           password: 'SecurePass123!',
         })
         .expect(200);
@@ -145,8 +128,8 @@ describe('Auth API Integration Tests', () => {
       const response = await request(app)
         .post(endpoint)
         .send({
-          email: 'loginuser@example.com',
-          password: 'WrongPassword!',
+          email: testEmail,
+          password: 'WrongPassword123!',
         })
         .expect(401);
 
@@ -157,7 +140,7 @@ describe('Auth API Integration Tests', () => {
       const response = await request(app)
         .post(endpoint)
         .send({
-          email: 'nonexistent@example.com',
+          email: `nonexistent-${Date.now()}@example.com`,
           password: 'SomePassword123!',
         })
         .expect(401);
@@ -169,7 +152,7 @@ describe('Auth API Integration Tests', () => {
       const response = await request(app)
         .post(endpoint)
         .send({
-          email: 'LOGINUSER@EXAMPLE.COM',
+          email: testEmail.toUpperCase(),
           password: 'SecurePass123!',
         })
         .expect(200);
@@ -182,9 +165,7 @@ describe('Auth API Integration Tests', () => {
     const endpoint = '/api/auth/me';
 
     it('should return current user profile with valid token', async () => {
-      const { accessToken } = await createAuthenticatedUser({
-        email: 'meuser@example.com',
-      });
+      const { accessToken } = await createAuthenticatedUser();
 
       const response = await request(app)
         .get(endpoint)
@@ -192,7 +173,8 @@ describe('Auth API Integration Tests', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('email', 'meuser@example.com');
+      expect(response.body.data).toHaveProperty('user');
+      expect(response.body.data.user).toHaveProperty('email');
     });
 
     it('should return 401 without token', async () => {
@@ -223,10 +205,8 @@ describe('Auth API Integration Tests', () => {
         .post(endpoint)
         .set('Authorization', `Bearer ${accessToken}`)
         .send({
-          consents: [
-            { type: 'terms_of_service', version: '1.0', accepted: true },
-            { type: 'privacy_policy', version: '1.0', accepted: true },
-          ],
+          termsOfService: true,
+          privacyPolicy: true,
         })
         .expect(200);
 
@@ -237,9 +217,8 @@ describe('Auth API Integration Tests', () => {
       await request(app)
         .post(endpoint)
         .send({
-          consents: [
-            { type: 'terms_of_service', version: '1.0', accepted: true },
-          ],
+          termsOfService: true,
+          privacyPolicy: true,
         })
         .expect(401);
     });
@@ -251,8 +230,8 @@ describe('Auth API Integration Tests', () => {
     it('should refresh tokens with valid refresh token', async () => {
       const { refreshToken, user } = await createAuthenticatedUser();
 
-      // Update user with refresh token
-      await User.findByIdAndUpdate(user._id, { refreshToken });
+      // Store refresh token in DB (required for refresh validation)
+      await query('UPDATE users SET refresh_token = $1 WHERE id = $2', [refreshToken, user.id]);
 
       const response = await request(app)
         .post(endpoint)

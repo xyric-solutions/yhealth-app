@@ -8,13 +8,18 @@ const activityLogStatusEnum = z.enum(['pending', 'completed', 'skipped', 'partia
 
 // S01.6.1: Generate Plan
 export const generatePlanSchema = z.object({
-  goalId: z.string().uuid().optional(),
+  // goalId can be a UUID (from database) or a temporary ID like "goal_1" (from AI generation)
+  goalId: z.string().optional(),
   regenerate: z.boolean().optional().default(false),
   preferences: z.object({
     preferredDays: z.array(z.string()).optional(),
     preferredTimes: z.record(z.string()).optional(),
     excludeActivities: z.array(z.string()).optional(),
   }).optional(),
+  // Safety acknowledgment
+  acknowledgedWarnings: z.boolean().optional().default(false),
+  // Custom weight change rate (kg per week, negative for loss)
+  weeklyWeightChangeKg: z.number().min(-2).max(1).optional(),
 });
 
 // S01.6.2: Update Plan

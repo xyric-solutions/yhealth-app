@@ -12,7 +12,7 @@ async function migrate() {
     try {
       await query('ALTER TABLE users ALTER COLUMN date_of_birth DROP NOT NULL');
       console.log('✅ Made date_of_birth nullable');
-    } catch (e) {
+    } catch (_e) {
       console.log('ℹ️ date_of_birth already nullable');
     }
 
@@ -20,7 +20,7 @@ async function migrate() {
     try {
       await query('ALTER TABLE users ALTER COLUMN gender DROP NOT NULL');
       console.log('✅ Made gender nullable');
-    } catch (e) {
+    } catch (_e) {
       console.log('ℹ️ gender already nullable');
     }
 

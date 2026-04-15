@@ -14,7 +14,7 @@ import {
 import { useEffect, useState } from "react";
 import confetti from "canvas-confetti";
 
-interface SuccessModalProps {
+export interface SuccessModalProps {
   isOpen: boolean;
   onClose: () => void;
   type: "goals" | "onboarding";
@@ -33,7 +33,7 @@ export function SuccessModal({
   autoClose = true,
   autoCloseDelay = 3000,
 }: SuccessModalProps) {
-  const [showConfetti, setShowConfetti] = useState(false);
+  const [_showConfetti, setShowConfetti] = useState(false);
 
   useEffect(() => {
     if (isOpen) {

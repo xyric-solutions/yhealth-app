@@ -1,0 +1,95 @@
+<%- include('layouts/base', {
+  title: subject || 'Your Weekly Summary',
+  preheader: coachMessage ? coachMessage.substring(0, 80) : 'Here is your weekly health summary.',
+  content: `
+    <tr>
+      <td style="padding: 32px 24px;">
+        <h1 style="margin: 0 0 8px; font-size: 24px; font-weight: 700; color: #111827;">
+          Your Week in Review 📊
+        </h1>
+        <p style="margin: 0 0 4px; font-size: 14px; color: #9ca3af;">
+          ${weekStart || ''} — ${weekEnd || ''}
+        </p>
+        <p style="margin: 0 0 24px; font-size: 15px; line-height: 24px; color: #6b7280;">
+          Hi ${firstName || 'there'}, here is what you accomplished this week:
+        </p>
+
+        <!-- Highlights -->
+        <% if (typeof highlights !== 'undefined' && highlights && highlights.length > 0) { %>
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom: 24px;">
+          <% highlights.forEach(function(h) { %>
+          <tr>
+            <td style="padding: 12px 16px; background: #f9fafb; border-radius: 8px; margin-bottom: 8px;">
+              <table cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td style="width: 32px; vertical-align: top; font-size: 20px;"><%= h.icon || '✅' %></td>
+                  <td style="padding-left: 8px;">
+                    <p style="margin: 0; font-size: 14px; font-weight: 600; color: #111827;"><%= h.title %></p>
+                    <p style="margin: 2px 0 0; font-size: 13px; color: #6b7280;"><%= h.description %></p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr><td style="height: 8px;"></td></tr>
+          <% }); %>
+        </table>
+        <% } %>
+
+        <!-- Coach Message -->
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom: 24px;">
+          <tr>
+            <td style="padding: 20px; background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%); border-radius: 12px; border-left: 4px solid #3b82f6;">
+              <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.5px;">
+                Coach's Note
+              </p>
+              <p style="margin: 0; font-size: 15px; line-height: 24px; color: #1f2937;">
+                ${coachMessage || 'Great work this week! Keep it up.'}
+              </p>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Insights -->
+        <% if (typeof insights !== 'undefined' && insights && insights.length > 0) { %>
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom: 24px;">
+          <tr>
+            <td>
+              <p style="margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #111827;">💡 Insights</p>
+              <% insights.forEach(function(insight) { %>
+              <p style="margin: 0 0 6px; font-size: 14px; line-height: 22px; color: #4b5563; padding-left: 16px; border-left: 2px solid #e5e7eb;">
+                <%= insight %>
+              </p>
+              <% }); %>
+            </td>
+          </tr>
+        </table>
+        <% } %>
+
+        <!-- Next Week Focus -->
+        <% if (typeof nextWeekFocus !== 'undefined' && nextWeekFocus) { %>
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom: 24px;">
+          <tr>
+            <td style="padding: 16px; background: #fefce8; border-radius: 8px;">
+              <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #ca8a04; text-transform: uppercase;">🎯 Next Week's Focus</p>
+              <p style="margin: 0; font-size: 14px; color: #713f12;"><%= nextWeekFocus %></p>
+            </td>
+          </tr>
+        </table>
+        <% } %>
+
+        <!-- CTA Button -->
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+          <tr>
+            <td align="center" style="padding: 8px 0 24px;">
+              <a href="${appUrl || 'https://yhealth.app'}/dashboard"
+                 style="display: inline-block; padding: 14px 32px; background: #3b82f6; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; border-radius: 8px;">
+                View Full Dashboard →
+              </a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  `
+}) %>

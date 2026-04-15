@@ -101,7 +101,7 @@ class NotificationService {
     await this.create({
       userId,
       type: 'celebration',
-      title: 'Welcome to YHealth! 🎉',
+      title: 'Welcome to Balencia! 🎉',
       message: userName
         ? `Hey ${userName}! Your health journey starts here. We're excited to help you achieve your goals.`
         : "Your health journey starts here. We're excited to help you achieve your goals!",
@@ -563,7 +563,7 @@ class NotificationService {
       userId,
       type: 'celebration',
       title: 'Profile Complete! 🌟',
-      message: 'Your profile is now complete. You are all set to get the most out of YHealth!',
+      message: 'Your profile is now complete. You are all set to get the most out of Balencia!',
       icon: '🌟',
       actionUrl: '/dashboard?tab=profile',
       actionLabel: 'View Profile',

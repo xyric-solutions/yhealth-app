@@ -8,7 +8,7 @@
  * - Goal-specific questions (8-12 per goal)
  * - Cross-pillar universal questions (asked for ALL goals)
  *
- * @see yhealth-platform/prd-epics/PRD-Epic-01-Onboarding-Assessment.md
+ * @see balencia-platform/prd-epics/PRD-Epic-01-Onboarding-Assessment.md
  */
 
 import 'dotenv/config';
@@ -1929,7 +1929,7 @@ const habitBuildingQuestions: AssessmentQuestion[] = [
         { value: 'life_change', label: 'Major life change' },
         { value: 'accumulated', label: 'Things have accumulated' },
         { value: 'inspired', label: 'Feeling inspired/motivated' },
-        { value: 'accountability', label: 'Found accountability (yHealth!)' },
+        { value: 'accountability', label: 'Found accountability (Balencia!)' },
         { value: 'always', label: 'Always the right time' },
       ],
     }
@@ -2333,7 +2333,7 @@ async function seedAssessmentQuestions(): Promise<void> {
   const pool = new Pool({
     host: process.env['DB_HOST'] || 'localhost',
     port: parseInt(process.env['DB_PORT'] || '5432', 10),
-    database: process.env['DB_NAME'] || 'yhealth',
+    database: process.env['DB_NAME'] || 'balencia',
     user: process.env['DB_USER'] || 'postgres',
     password: process.env['DB_PASSWORD'] || '',
   });
@@ -2342,13 +2342,9 @@ async function seedAssessmentQuestions(): Promise<void> {
     console.log('Connecting to database...');
     console.log(`Total questions to seed: ${allQuestions.length}`);
 
-    // Clear existing questions
-    console.log('Clearing existing assessment questions...');
-    await pool.query('DELETE FROM assessment_questions');
-
-    // Insert questions in batches
+    // Upsert questions in batches (insert new, update existing — no destructive DELETE)
     const batchSize = 50;
-    let insertedCount = 0;
+    let upsertedCount = 0;
 
     for (let i = 0; i < allQuestions.length; i += batchSize) {
       const batch = allQuestions.slice(i, i + batchSize);
@@ -2382,11 +2378,23 @@ async function seedAssessmentQuestions(): Promise<void> {
           id, question_id, text, type, category, pillar, order_num,
           is_required, options, slider_config, validation, show_if
         ) VALUES ${placeholders.join(', ')}
+        ON CONFLICT (question_id) DO UPDATE SET
+          text = EXCLUDED.text,
+          type = EXCLUDED.type,
+          category = EXCLUDED.category,
+          pillar = EXCLUDED.pillar,
+          order_num = EXCLUDED.order_num,
+          is_required = EXCLUDED.is_required,
+          options = EXCLUDED.options,
+          slider_config = EXCLUDED.slider_config,
+          validation = EXCLUDED.validation,
+          show_if = EXCLUDED.show_if,
+          updated_at = CURRENT_TIMESTAMP
       `;
 
       await pool.query(insertQuery, values);
-      insertedCount += batch.length;
-      console.log(`Inserted ${insertedCount}/${allQuestions.length} questions...`);
+      upsertedCount += batch.length;
+      console.log(`Upserted ${upsertedCount}/${allQuestions.length} questions...`);
     }
 
     // Verify insertion

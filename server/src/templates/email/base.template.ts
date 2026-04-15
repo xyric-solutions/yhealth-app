@@ -1,5 +1,5 @@
 /**
- * yHealth Email Templates - Base Layout
+ * Balencia Email Templates - Base Layout
  * Modern, responsive email templates aligned with AI Life Coach branding
  */
 
@@ -193,7 +193,7 @@ export function baseEmailLayout(data: EmailTemplateData): string {
                   <tr>
                     <td style="padding-top: 24px; border-top: 1px solid ${BRAND_COLORS.gray200};">
                       <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: ${BRAND_COLORS.gray500};">
-                        ${footer.text || 'Need help? Reply to this email or contact us at support@yhealth.app'}
+                        ${footer.text || 'Need help? Reply to this email or contact us at support@balencia.app'}
                       </p>
                     </td>
                   </tr>
@@ -217,17 +217,17 @@ export function baseEmailLayout(data: EmailTemplateData): string {
                 <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
                   <tr>
                     <td style="padding: 0 8px;">
-                      <a href="https://twitter.com/yhealthapp" style="display: inline-block; width: 36px; height: 36px; background: ${BRAND_COLORS.gray200}; border-radius: 50%; text-align: center; line-height: 36px;">
+                      <a href="https://twitter.com/balenciaapp" style="display: inline-block; width: 36px; height: 36px; background: ${BRAND_COLORS.gray200}; border-radius: 50%; text-align: center; line-height: 36px;">
                         <img src="https://cdn-icons-png.flaticon.com/24/733/733579.png" width="18" height="18" alt="Twitter" style="vertical-align: middle;">
                       </a>
                     </td>
                     <td style="padding: 0 8px;">
-                      <a href="https://instagram.com/yhealthapp" style="display: inline-block; width: 36px; height: 36px; background: ${BRAND_COLORS.gray200}; border-radius: 50%; text-align: center; line-height: 36px;">
+                      <a href="https://instagram.com/balenciaapp" style="display: inline-block; width: 36px; height: 36px; background: ${BRAND_COLORS.gray200}; border-radius: 50%; text-align: center; line-height: 36px;">
                         <img src="https://cdn-icons-png.flaticon.com/24/2111/2111463.png" width="18" height="18" alt="Instagram" style="vertical-align: middle;">
                       </a>
                     </td>
                     <td style="padding: 0 8px;">
-                      <a href="https://linkedin.com/company/yhealthapp" style="display: inline-block; width: 36px; height: 36px; background: ${BRAND_COLORS.gray200}; border-radius: 50%; text-align: center; line-height: 36px;">
+                      <a href="https://linkedin.com/company/balenciaapp" style="display: inline-block; width: 36px; height: 36px; background: ${BRAND_COLORS.gray200}; border-radius: 50%; text-align: center; line-height: 36px;">
                         <img src="https://cdn-icons-png.flaticon.com/24/3536/3536505.png" width="18" height="18" alt="LinkedIn" style="vertical-align: middle;">
                       </a>
                     </td>
@@ -241,7 +241,7 @@ export function baseEmailLayout(data: EmailTemplateData): string {
             <tr>
               <td style="text-align: center;">
                 <p style="margin: 0 0 8px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; color: ${BRAND_COLORS.gray500};">
-                  yHealth by Xyric Solutions
+                  Balencia by Xyric Solutions
                 </p>
                 <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; color: ${BRAND_COLORS.gray400};">
                   Your AI Life Coach - Powered by invisible intelligence

@@ -1,0 +1,77 @@
+<%# Task Reminder Template %>
+<%- include('./layouts/base', {
+  title: 'Task Reminder - yHealth',
+  preheader: `${firstName}, you have a task coming up: ${taskTitle}`,
+  greeting: `Hi ${firstName}!`,
+  content: `
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); border-radius: 50%; margin: 0 auto 16px; line-height: 80px;">
+        <span style="font-size: 40px;"><%= categoryIcon || '📋' %></span>
+      </div>
+    </div>
+
+    <p style="margin: 0 0 24px 0; text-align: center; font-size: 18px; color: #1F2937;">
+      You have a task scheduled - don't miss it!
+    </p>
+
+    <!-- Task Card -->
+    <div style="background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%); border-radius: 12px; padding: 24px; margin: 24px 0;">
+      <!-- Priority Badge -->
+      <div style="text-align: center; margin-bottom: 16px;">
+        <span style="display: inline-block; background: <%= priority === 'urgent' ? '#FEE2E2' : priority === 'high' ? '#FFEDD5' : priority === 'medium' ? '#FEF3C7' : '#DBEAFE' %>; color: <%= priority === 'urgent' ? '#DC2626' : priority === 'high' ? '#EA580C' : priority === 'medium' ? '#CA8A04' : '#2563EB' %>; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+          <%= priorityIcon %> <%= priority %> Priority
+        </span>
+      </div>
+
+      <!-- Task Title -->
+      <p style="margin: 0 0 8px 0; font-size: 22px; font-weight: 700; color: #1F2937; text-align: center;">
+        <%= taskTitle %>
+      </p>
+
+      <!-- Task Description -->
+      <% if (taskDescription && taskDescription !== 'No description provided') { %>
+      <p style="margin: 0 0 16px 0; font-size: 14px; color: #6B7280; text-align: center;">
+        <%= taskDescription %>
+      </p>
+      <% } %>
+
+      <!-- Scheduled Time -->
+      <div style="background: white; border-radius: 8px; padding: 16px; text-align: center;">
+        <p style="margin: 0 0 4px 0; font-size: 12px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 1px;">
+          Scheduled For
+        </p>
+        <p style="margin: 0; font-size: 18px; font-weight: 600; color: #7C3AED;">
+          🕐 <%= scheduledTime %>
+        </p>
+      </div>
+
+      <!-- Category -->
+      <div style="text-align: center; margin-top: 16px;">
+        <span style="display: inline-block; background: #F3F4F6; color: #4B5563; padding: 4px 12px; border-radius: 12px; font-size: 12px;">
+          <%= categoryIcon %> <%= category.charAt(0).toUpperCase() + category.slice(1) %>
+        </span>
+      </div>
+    </div>
+
+    <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 26px; text-align: center;">
+      Stay organized and productive! Click below to view your task or mark it as complete.
+    </p>
+
+    <!-- Quick Actions -->
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="<%= completeUrl %>" style="display: inline-block; background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 0 8px 8px 0;">
+        ✓ Mark Complete
+      </a>
+    </div>
+
+    <p style="margin: 24px 0 0 0; font-size: 14px; font-style: italic; color: #6B7280; text-align: center;">
+      "The key is not to prioritize what's on your schedule, but to schedule your priorities." - Stephen Covey
+    </p>
+  `,
+  ctaButton: {
+    text: 'View Task Details',
+    url: dashboardUrl,
+    color: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)'
+  },
+  footerText: "You're doing great! Keep up the momentum."
+}) %>

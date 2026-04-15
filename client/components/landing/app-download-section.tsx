@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { AnimatedGradientMesh, GSAPScrollReveal, GSAPParallax } from "./shared";
 import {
   Smartphone,
   Apple,
@@ -10,6 +11,9 @@ import {
   Shield,
   Zap,
   CheckCircle,
+  Activity,
+  Heart,
+  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,18 +30,18 @@ function PlayStoreIcon({ className }: { className?: string }) {
 const appFeatures = [
   {
     icon: Shield,
-    title: "Privacy First",
-    description: "Your health data stays secure",
+    title: "Enterprise-Grade Security",
+    description: "AES-256 encryption, HIPAA compliant",
   },
   {
     icon: Zap,
-    title: "Offline Mode",
-    description: "Track even without internet",
+    title: "Works Anywhere",
+    description: "Full offline tracking and sync",
   },
   {
     icon: Star,
-    title: "4.9 Rating",
-    description: "Loved by 50K+ users",
+    title: "4.9 Star Rating",
+    description: "Trusted by 50,000+ members",
   },
 ];
 
@@ -60,8 +64,62 @@ const storeButtons = [
   },
 ];
 
-// Animated phone with app screens
+// ─── Screen content variants for cycling ────────────────────────────
+const screenVariants = [
+  {
+    id: "dashboard",
+    title: "Wellness Score",
+    badge: "+18% this week",
+    score: "94",
+    pillars: ["Fitness", "Nutrition", "Wellbeing"],
+    icon: Brain,
+    color: "from-primary to-purple-500",
+  },
+  {
+    id: "fitness",
+    title: "Today's Workout",
+    badge: "In Progress",
+    score: "82%",
+    pillars: ["HIIT", "32 min", "480 kcal"],
+    icon: Activity,
+    color: "from-[#FF9800] to-[#F57C00]",
+  },
+  {
+    id: "wellbeing",
+    title: "Wellbeing Index",
+    badge: "Optimal",
+    score: "96",
+    pillars: ["Sleep 8.2h", "Recovery", "HRV 62ms"],
+    icon: Heart,
+    color: "from-[#5C9CE6] to-[#3B82F6]",
+  },
+];
+
+// ─── Shimmer wrapper for store buttons ──────────────────────────────
+function ShimmerWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative overflow-hidden group rounded-lg">
+      {children}
+      {/* Shimmer sweep on hover */}
+      <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none rounded-lg z-10" />
+    </div>
+  );
+}
+
+// ─── Animated phone with cycling screens ────────────────────────────
 function AnimatedPhone() {
+  const [activeScreen, setActiveScreen] = useState(0);
+
+  // Auto-cycle screens
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveScreen((prev) => (prev + 1) % screenVariants.length);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const screen = screenVariants[activeScreen];
+
   return (
     <div className="relative">
       {/* Main phone */}
@@ -79,7 +137,7 @@ function AnimatedPhone() {
 
           {/* Screen */}
           <div className="relative bg-background rounded-[2rem] overflow-hidden aspect-[9/19]">
-            {/* App UI mockup */}
+            {/* App UI mockup — cycles through variants */}
             <div className="absolute inset-0 bg-gradient-to-b from-primary/10 to-purple-500/10">
               {/* Header */}
               <div className="p-4 pt-8">
@@ -90,42 +148,53 @@ function AnimatedPhone() {
                   <div>
                     <p className="text-sm font-semibold">Good morning!</p>
                     <p className="text-xs text-muted-foreground">
-                      Let&apos;s crush today
+                      Here&apos;s your daily briefing
                     </p>
                   </div>
                 </div>
 
-                {/* Score card */}
-                <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  whileInView={{ scale: 1, opacity: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.3 }}
-                  className="glass-card rounded-xl p-4 border border-primary/20"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-muted-foreground">
-                      Daily Score
-                    </span>
-                    <span className="text-xs text-green-500">+12%</span>
-                  </div>
-                  <div className="text-3xl font-bold gradient-text">87</div>
-                  <div className="flex gap-2 mt-2">
-                    {["Fitness", "Nutrition", "Wellbeing"].map((pillar, i) => (
-                      <span
-                        key={pillar}
-                        className={cn(
-                          "text-[10px] px-2 py-0.5 rounded-full",
-                          i === 0 && "bg-[#FF9800]/20 text-[#FF9800]",
-                          i === 1 && "bg-[#4CAF50]/20 text-[#4CAF50]",
-                          i === 2 && "bg-[#5C9CE6]/20 text-[#5C9CE6]"
-                        )}
-                      >
-                        {pillar}
+                {/* Cycling score card */}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={screen.id}
+                    initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, scale: 1.02, filter: "blur(4px)" }}
+                    transition={{ duration: 0.3 }}
+                    className="glass-card rounded-xl p-4 border border-primary/20"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-muted-foreground">
+                        {screen.title}
                       </span>
-                    ))}
-                  </div>
-                </motion.div>
+                      <span className="text-xs text-green-500">{screen.badge}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className={cn("w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center", screen.color)}>
+                        <screen.icon className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-3xl font-bold gradient-text">{screen.score}</div>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      {screen.pillars.map((pillar, i) => (
+                        <motion.span
+                          key={pillar}
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.15 + i * 0.08 }}
+                          className={cn(
+                            "text-[10px] px-2 py-0.5 rounded-full",
+                            i === 0 && "bg-[#FF9800]/20 text-[#FF9800]",
+                            i === 1 && "bg-[#4CAF50]/20 text-[#4CAF50]",
+                            i === 2 && "bg-[#5C9CE6]/20 text-[#5C9CE6]"
+                          )}
+                        >
+                          {pillar}
+                        </motion.span>
+                      ))}
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
 
                 {/* Quick actions */}
                 <div className="grid grid-cols-3 gap-2 mt-4">
@@ -179,6 +248,19 @@ function AnimatedPhone() {
                 </motion.div>
               </div>
             </div>
+
+            {/* Screen indicator dots */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+              {screenVariants.map((_, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "h-1 rounded-full transition-all duration-300",
+                    activeScreen === i ? "w-4 bg-primary" : "w-1.5 bg-muted-foreground/30"
+                  )}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
@@ -186,122 +268,106 @@ function AnimatedPhone() {
         <div className="absolute -inset-8 bg-gradient-to-r from-primary/20 to-purple-500/20 rounded-full blur-3xl -z-10" />
       </motion.div>
 
-      {/* Floating elements */}
-      <motion.div
-        initial={{ opacity: 0, x: -30 }}
-        whileInView={{ opacity: 1, x: 0 }}
-        viewport={{ once: true }}
-        transition={{ delay: 0.5 }}
-        className="absolute -left-4 sm:-left-12 top-1/4 glass-card rounded-xl p-3 shadow-lg hidden sm:block"
-      >
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
-            <CheckCircle className="w-4 h-4 text-white" />
+      {/* Floating elements with GSAP parallax */}
+      <GSAPParallax speed={0.15}>
+        <motion.div
+          initial={{ opacity: 0, x: -30 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.5 }}
+          className="absolute -left-4 sm:-left-12 top-1/4 glass-card rounded-xl p-3 shadow-lg hidden sm:block"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+              <CheckCircle className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-xs font-medium">Goal achieved!</p>
+              <p className="text-[10px] text-muted-foreground">10K steps</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-medium">Goal achieved!</p>
-            <p className="text-[10px] text-muted-foreground">10K steps</p>
-          </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      </GSAPParallax>
 
-      <motion.div
-        initial={{ opacity: 0, x: 30 }}
-        whileInView={{ opacity: 1, x: 0 }}
-        viewport={{ once: true }}
-        transition={{ delay: 0.6 }}
-        className="absolute -right-4 sm:-right-12 top-1/2 glass-card rounded-xl p-3 shadow-lg hidden sm:block"
-      >
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
-            <Star className="w-4 h-4 text-white fill-white" />
+      <GSAPParallax speed={0.2} direction="down">
+        <motion.div
+          initial={{ opacity: 0, x: 30 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.6 }}
+          className="absolute -right-4 sm:-right-12 top-1/2 glass-card rounded-xl p-3 shadow-lg hidden sm:block"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
+              <Star className="w-4 h-4 text-white fill-white" />
+            </div>
+            <div>
+              <p className="text-xs font-medium">New badge</p>
+              <p className="text-[10px] text-muted-foreground">7-day streak</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-medium">New badge</p>
-            <p className="text-[10px] text-muted-foreground">7-day streak</p>
-          </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      </GSAPParallax>
 
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ delay: 0.7 }}
-        className="absolute -bottom-4 left-1/2 -translate-x-1/2 glass-card rounded-full px-4 py-2 shadow-lg"
-      >
-        <div className="flex items-center gap-2">
-          <Smartphone className="w-4 h-4 text-primary" />
-          <span className="text-xs">Available now</span>
-        </div>
-      </motion.div>
+      <GSAPParallax speed={0.1}>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.7 }}
+          className="absolute -bottom-4 left-1/2 -translate-x-1/2 glass-card rounded-full px-4 py-2 shadow-lg"
+        >
+          <div className="flex items-center gap-2">
+            <Smartphone className="w-4 h-4 text-primary" />
+            <span className="text-xs">Available now</span>
+          </div>
+        </motion.div>
+      </GSAPParallax>
     </div>
   );
 }
 
+// ─── APP DOWNLOAD SECTION ───────────────────────────────────────────
 export function AppDownloadSection() {
-  const sectionRef = useRef(null);
-  const isInView = useInView(sectionRef, { once: true, margin: "-100px" });
-
   return (
-    <section className="py-12 relative overflow-hidden">
+    <section className="py-20 md:py-28 lg:py-32 relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 cyber-grid opacity-20" />
+      <AnimatedGradientMesh intensity={0.18} speed={0.9} blur={100} />
       <div className="absolute top-0 left-1/4 w-64 sm:w-80 md:w-96 h-64 sm:h-80 md:h-96 bg-primary/5 rounded-full blur-3xl" />
       <div className="absolute bottom-0 right-1/4 w-56 sm:w-72 md:w-80 h-56 sm:h-72 md:h-80 bg-purple-500/5 rounded-full blur-3xl" />
 
-      <div ref={sectionRef} className="container mx-auto px-4 relative z-10">
+      <div className="container mx-auto px-4 relative z-10">
         <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 lg:gap-16 items-center">
           {/* Content */}
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            animate={isInView ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 0.6 }}
+          <GSAPScrollReveal
+            direction="left"
+            distance={30}
+            duration={0.6}
             className="text-center lg:text-left order-2 lg:order-1"
           >
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 glass-card px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-6"
-            >
+            <div className="inline-flex items-center gap-2 glass-card px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-6">
               <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
-              <span>Download the App</span>
-            </motion.div>
+              <span>Available on iOS and Android</span>
+            </div>
 
-            <motion.h2
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 md:mb-6"
-            >
-              Your Health,{" "}
-              <span className="gradient-text-animated">In Your Pocket</span>
-            </motion.h2>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 md:mb-6">
+              Your AI Health Coach,{" "}
+              <span className="gradient-text-animated">Always With You</span>
+            </h2>
 
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-sm sm:text-base md:text-lg text-muted-foreground mb-6 sm:mb-8 max-w-lg mx-auto lg:mx-0"
-            >
-              Download yHealth on your favorite device and start your wellness
-              journey today. Available on iOS and Android.
-            </motion.p>
+            <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-6 sm:mb-8 max-w-lg mx-auto lg:mx-0">
+              Personalized fitness plans, real-time nutrition guidance, and
+              wellbeing insights -- all powered by AI that learns your patterns
+              and adapts to your goals. Download Balencia and see results in weeks,
+              not months.
+            </p>
 
             {/* Features */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="grid grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8"
-            >
-              {appFeatures.map((feature, index) => (
-                <motion.div
+            <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
+              {appFeatures.map((feature) => (
+                <div
                   key={feature.title}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={isInView ? { opacity: 1, y: 0 } : {}}
-                  transition={{ duration: 0.4, delay: 0.4 + index * 0.1 }}
                   className="glass-card rounded-xl p-3 sm:p-4 text-center border border-white/10"
                 >
                   <feature.icon className="w-5 h-5 sm:w-6 sm:h-6 text-primary mx-auto mb-1 sm:mb-2" />
@@ -311,63 +377,55 @@ export function AppDownloadSection() {
                   <p className="text-[10px] sm:text-xs text-muted-foreground">
                     {feature.description}
                   </p>
-                </motion.div>
+                </div>
               ))}
-            </motion.div>
+            </div>
 
-            {/* Store buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: 0.7 }}
-              className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start"
-            >
+            {/* Store buttons with shimmer */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
               {storeButtons.map((store) => (
-                <Button
-                  key={store.name}
-                  asChild
-                  size="lg"
-                  className={cn(
-                    "h-12 sm:h-14 px-5 sm:px-6 bg-gradient-to-r transition-all",
-                    store.gradient,
-                    store.hoverGradient
-                  )}
-                >
-                  <a href={store.href} className="flex items-center gap-3">
-                    <store.icon className="w-6 h-6 sm:w-7 sm:h-7" />
-                    <div className="text-left">
-                      <span className="text-[10px] sm:text-xs text-gray-400 block">
-                        {store.subtitle}
-                      </span>
-                      <span className="text-sm sm:text-base font-semibold">
-                        {store.name}
-                      </span>
-                    </div>
-                  </a>
-                </Button>
+                <ShimmerWrapper key={store.name}>
+                  <Button
+                    asChild
+                    size="lg"
+                    className={cn(
+                      "h-12 sm:h-14 px-5 sm:px-6 bg-gradient-to-r transition-all w-full",
+                      store.gradient,
+                      store.hoverGradient
+                    )}
+                  >
+                    <a href={store.href} className="flex items-center gap-3">
+                      <store.icon className="w-6 h-6 sm:w-7 sm:h-7" />
+                      <div className="text-left">
+                        <span className="text-[10px] sm:text-xs text-gray-400 block">
+                          {store.subtitle}
+                        </span>
+                        <span className="text-sm sm:text-base font-semibold">
+                          {store.name}
+                        </span>
+                      </div>
+                    </a>
+                  </Button>
+                </ShimmerWrapper>
               ))}
-            </motion.div>
+            </div>
 
             {/* QR Code hint */}
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={isInView ? { opacity: 1 } : {}}
-              transition={{ duration: 0.5, delay: 0.9 }}
-              className="text-xs text-muted-foreground mt-4 sm:mt-6"
-            >
-              Or scan the QR code with your phone camera
-            </motion.p>
-          </motion.div>
+            <p className="text-xs text-muted-foreground mt-4 sm:mt-6">
+              Scan the QR code to download instantly
+            </p>
+          </GSAPScrollReveal>
 
           {/* Phone mockup */}
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            animate={isInView ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.2 }}
+          <GSAPScrollReveal
+            direction="right"
+            distance={30}
+            duration={0.6}
+            delay={0.2}
             className="flex justify-center order-1 lg:order-2"
           >
             <AnimatedPhone />
-          </motion.div>
+          </GSAPScrollReveal>
         </div>
       </div>
     </section>

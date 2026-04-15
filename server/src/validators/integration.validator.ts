@@ -12,6 +12,7 @@ const integrationProviderEnum = z.enum([
   'nutritionix',
   'cronometer',
   'strava',
+  'spotify',
 ]);
 
 // Data types
@@ -84,6 +85,28 @@ export const setGoldenSourceSchema = z.object({
   providerOrder: z.array(integrationProviderEnum).min(1),
 });
 
+// WHOOP Credentials Management
+export const storeWhoopCredentialsSchema = z.object({
+  clientId: z.string().min(1, 'Client ID is required'),
+  clientSecret: z.string().min(1, 'Client secret is required'),
+});
+
+// WHOOP Token Management
+export const manageWhoopTokensSchema = z.object({
+  accessToken: z.string().min(1, 'Access token is required'),
+  refreshToken: z.string().optional(),
+  tokenExpiry: z.string().optional().refine(
+    (val) => {
+      if (!val) return true; // Optional field
+      // Accept ISO datetime strings or datetime-local format (YYYY-MM-DDTHH:mm)
+      const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d{3})?Z?$/;
+      const localRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+      return isoRegex.test(val) || localRegex.test(val) || !isNaN(Date.parse(val));
+    },
+    { message: 'Invalid datetime format' }
+  ),
+});
+
 // Types
 export type SelectIntegrationsInput = z.infer<typeof selectIntegrationsSchema>;
 export type InitiateOAuthInput = z.infer<typeof initiateOAuthSchema>;
@@ -93,3 +116,5 @@ export type TriggerSyncInput = z.infer<typeof triggerSyncSchema>;
 export type UpdateIntegrationInput = z.infer<typeof updateIntegrationSchema>;
 export type DisconnectIntegrationInput = z.infer<typeof disconnectIntegrationSchema>;
 export type SetGoldenSourceInput = z.infer<typeof setGoldenSourceSchema>;
+export type StoreWhoopCredentialsInput = z.infer<typeof storeWhoopCredentialsSchema>;
+export type ManageWhoopTokensInput = z.infer<typeof manageWhoopTokensSchema>;

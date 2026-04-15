@@ -1,23 +1,15 @@
 "use client";
 
 import { useRef } from "react";
-import { motion, useInView, useScroll, useTransform } from "framer-motion";
+import { motion, useInView } from "framer-motion";
 import {
-  Activity,
-  Brain,
-  Heart,
-  Utensils,
-  Moon,
-  Zap,
-  Target,
-  TrendingUp,
-  Sparkles,
-  MessageSquare,
-  Smartphone,
-  Watch,
+  Activity, Brain, Heart, Utensils, Moon, Zap, Target, TrendingUp,
+  Sparkles, MessageSquare, Smartphone, Watch, Mic, Users,
 } from "lucide-react";
+import { useGSAP } from "@/hooks/use-gsap";
+import { gsap } from "@/lib/gsap-init";
+import { AnimatedGradientMesh, GSAPScrollReveal, GSAPParallax, FloatingCard } from "./shared";
 
-// Three pillars with their associated features
 const pillars = [
   {
     id: "fitness",
@@ -26,24 +18,12 @@ const pillars = [
     icon: Activity,
     color: "from-cyan-400 to-cyan-600",
     glowColor: "cyan",
-    description:
-      "AI-powered workout optimization that adapts to your body, schedule, and goals.",
+    accentHsl: "190 90% 50%",
+    description: "AI-powered workout optimization that adapts to your body, schedule, and goals.",
     features: [
-      {
-        icon: Activity,
-        title: "Activity Tracking",
-        desc: "Real-time workout analytics",
-      },
-      {
-        icon: Target,
-        title: "Goal Achievement",
-        desc: "Personalized milestone tracking",
-      },
-      {
-        icon: TrendingUp,
-        title: "Progress Insights",
-        desc: "Visual performance trends",
-      },
+      { icon: Activity, title: "Activity Tracking", desc: "Real-time workout analytics" },
+      { icon: Target, title: "Goal Achievement", desc: "Personalized milestone tracking" },
+      { icon: TrendingUp, title: "Progress Insights", desc: "Visual performance trends" },
     ],
   },
   {
@@ -53,20 +33,12 @@ const pillars = [
     icon: Utensils,
     color: "from-purple-400 to-purple-600",
     glowColor: "purple",
-    description:
-      "Smart meal planning and tracking that understands your nutritional needs.",
+    accentHsl: "280 80% 60%",
+    description: "Smart meal planning and tracking that understands your nutritional needs.",
     features: [
       { icon: Utensils, title: "Meal Planning", desc: "AI-curated diet plans" },
-      {
-        icon: Heart,
-        title: "Macro Tracking",
-        desc: "Automated nutrition logging",
-      },
-      {
-        icon: Zap,
-        title: "Energy Optimization",
-        desc: "Fuel your performance",
-      },
+      { icon: Heart, title: "Macro Tracking", desc: "Automated nutrition logging" },
+      { icon: Zap, title: "Energy Optimization", desc: "Fuel your performance" },
     ],
   },
   {
@@ -76,54 +48,29 @@ const pillars = [
     icon: Brain,
     color: "from-pink-400 to-pink-600",
     glowColor: "pink",
-    description:
-      "Holistic wellness support for mental clarity, better sleep, and stress management.",
+    accentHsl: "330 80% 60%",
+    description: "Holistic wellness support for mental clarity, better sleep, and stress management.",
     features: [
-      {
-        icon: Brain,
-        title: "Mental Wellness",
-        desc: "Mindfulness & stress relief",
-      },
+      { icon: Brain, title: "Mental Wellness", desc: "Mindfulness & stress relief" },
       { icon: Moon, title: "Sleep Analysis", desc: "Deep sleep optimization" },
-      {
-        icon: Sparkles,
-        title: "Daily Insights",
-        desc: "Personalized wellbeing tips",
-      },
+      { icon: Sparkles, title: "Daily Insights", desc: "Personalized wellbeing tips" },
     ],
   },
 ];
 
 const aiCapabilities = [
-  {
-    icon: MessageSquare,
-    title: "Conversational AI",
-    description: "Talk naturally with your AI coach via voice or text",
-  },
-  {
-    icon: Smartphone,
-    title: "WhatsApp Integration",
-    description: "Get coaching through your favorite messaging app",
-  },
-  {
-    icon: Watch,
-    title: "Device Sync",
-    description: "Seamlessly connects with all your fitness devices",
-  },
-  {
-    icon: Brain,
-    title: "Predictive Insights",
-    description: "AI anticipates your needs before you ask",
-  },
+  { icon: MessageSquare, title: "Conversational AI", description: "Talk naturally with your AI coach via voice or text" },
+  { icon: Mic, title: "Voice & Call Coach", description: "Hands-free voice assistant and live call with your AI coach" },
+  { icon: Smartphone, title: "WhatsApp Integration", description: "Get coaching through your favorite messaging app" },
+  { icon: Watch, title: "Device Sync", description: "Seamlessly connects with all your fitness devices" },
+  { icon: Brain, title: "Predictive Insights", description: "AI anticipates your needs before you ask" },
+  { icon: Users, title: "Community & Competitions", description: "Leaderboards, challenges, and support from others" },
 ];
 
-// Animated connection lines
+// ─── Animated connection lines ───────────────────────────────────────
 function ConnectionLines() {
   return (
-    <svg
-      className="absolute inset-0 w-full h-full pointer-events-none opacity-20"
-      preserveAspectRatio="none"
-    >
+    <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-20" preserveAspectRatio="none">
       <defs>
         <linearGradient id="lineGradient1" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="oklch(0.75 0.2 180)" stopOpacity="0" />
@@ -133,9 +80,7 @@ function ConnectionLines() {
       </defs>
       <motion.path
         d="M 0 200 Q 400 100 800 200 T 1600 200"
-        stroke="url(#lineGradient1)"
-        strokeWidth="1"
-        fill="none"
+        stroke="url(#lineGradient1)" strokeWidth="1" fill="none"
         initial={{ pathLength: 0, opacity: 0 }}
         animate={{ pathLength: 1, opacity: 1 }}
         transition={{ duration: 2, ease: "easeInOut" }}
@@ -144,103 +89,113 @@ function ConnectionLines() {
   );
 }
 
-// Pillar Card Component
-function PillarCard({
-  pillar,
-  index,
-}: {
-  pillar: (typeof pillars)[0];
-  index: number;
-}) {
-  const ref = useRef(null);
+// ─── 3D Tilt Pillar Card ─────────────────────────────────────────────
+function PillarCard({ pillar, index }: { pillar: (typeof pillars)[0]; index: number }) {
+  const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 50 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6, delay: index * 0.2 }}
+    <GSAPScrollReveal
+      direction="up"
+      distance={50}
+      delay={index * 0.15}
+      duration={0.6}
       className="relative group"
     >
-      {/* Glow effect on hover */}
-      <div
-        className={`absolute -inset-1 bg-gradient-to-r ${pillar.color} rounded-3xl blur-xl opacity-0 group-hover:opacity-30 transition-opacity duration-500`}
-      />
+      <FloatingCard
+        intensity={12}
+        perspective={800}
+        enableHover={true}
+        enableFloat={true}
+        floatDuration={6}
+        floatDistance={15}
+        className="h-full"
+      >
+        <div ref={ref} className="relative h-full">
+          {/* Hover glow */}
+          <div className={`absolute -inset-1 bg-gradient-to-r ${pillar.color} rounded-3xl blur-xl opacity-0 group-hover:opacity-30 transition-opacity duration-500`} />
 
-      <div className="relative glass-card rounded-3xl p-8 h-full border border-white/10 overflow-hidden">
-        {/* Background pattern */}
-        <div className="absolute inset-0 circuit-pattern opacity-5" />
-
-        {/* Header */}
-        <div className="relative z-10">
+          {/* Animated gradient border sweep */}
           <motion.div
-            initial={{ scale: 0 }}
-            animate={isInView ? { scale: 1 } : {}}
-            transition={{
-              duration: 0.5,
-              delay: index * 0.2 + 0.3,
-              type: "spring",
-            }}
-            className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${pillar.color} flex items-center justify-center mb-6 glow-${pillar.glowColor}`}
+            className="absolute -inset-[1px] rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 overflow-hidden"
+            style={{ padding: "1px" }}
           >
-            <pillar.icon className="w-8 h-8 text-white" />
+            <motion.div
+              className="absolute inset-0"
+              style={{
+                background: `conic-gradient(from 0deg, transparent 0%, hsl(${pillar.accentHsl}) 10%, transparent 20%)`,
+              }}
+              animate={{ rotate: [0, 360] }}
+              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+            />
           </motion.div>
 
-          <span
-            className={`text-sm font-medium bg-gradient-to-r ${pillar.color} bg-clip-text text-transparent`}
+          <div
+            className="relative glass-card rounded-3xl p-6 sm:p-8 h-full border border-white/10 backdrop-blur-xl overflow-hidden"
+            style={{
+              transformStyle: "preserve-3d",
+              willChange: "transform",
+            }}
           >
-            {pillar.subtitle}
-          </span>
-          <h3 className="text-2xl font-bold mt-1 mb-3">{pillar.title}</h3>
-          <p className="text-muted-foreground mb-6">{pillar.description}</p>
+            {/* Background pattern */}
+            <div className="absolute inset-0 circuit-pattern opacity-5" />
 
-          {/* Feature list */}
-          <div className="space-y-4">
-            {pillar.features.map((feature, i) => (
+            {/* Content */}
+            <div className="relative z-10" style={{ transform: "translateZ(20px)" }}>
               <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, x: -20 }}
-                animate={isInView ? { opacity: 1, x: 0 } : {}}
-                transition={{
-                  duration: 0.4,
-                  delay: index * 0.2 + 0.5 + i * 0.1,
-                }}
-                className="flex items-center gap-3"
+                initial={{ scale: 0 }}
+                animate={isInView ? { scale: 1 } : {}}
+                transition={{ duration: 0.5, delay: index * 0.2 + 0.3, type: "spring", stiffness: 200 }}
+                className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${pillar.color} flex items-center justify-center mb-6 glow-${pillar.glowColor}`}
               >
-                <div
-                  className={`w-10 h-10 rounded-xl bg-gradient-to-br ${pillar.color} bg-opacity-10 flex items-center justify-center`}
-                >
-                  <feature.icon className="w-5 h-5 text-white/80" />
-                </div>
-                <div>
-                  <div className="font-medium text-sm">{feature.title}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {feature.desc}
-                  </div>
-                </div>
+                <pillar.icon className="w-8 h-8 text-white" />
               </motion.div>
-            ))}
+
+              <span className={`text-sm font-medium bg-gradient-to-r ${pillar.color} bg-clip-text text-transparent`}>
+                {pillar.subtitle}
+              </span>
+              <h3 className="text-2xl font-bold mt-1 mb-3">{pillar.title}</h3>
+              <p className="text-muted-foreground mb-6">{pillar.description}</p>
+
+              {/* Feature list with spring+bounce entrance */}
+              <div className="space-y-4">
+                {pillar.features.map((feature, i) => (
+                  <motion.div
+                    key={feature.title}
+                    initial={{ opacity: 0, x: -20, scale: 0.9 }}
+                    animate={isInView ? { opacity: 1, x: 0, scale: 1 } : {}}
+                    transition={{
+                      duration: 0.5,
+                      delay: index * 0.2 + 0.5 + i * 0.12,
+                      type: "spring",
+                      stiffness: 200,
+                      damping: 15,
+                    }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${pillar.color} bg-opacity-10 flex items-center justify-center shrink-0`}>
+                      <feature.icon className="w-5 h-5 text-white/80" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-sm">{feature.title}</div>
+                      <div className="text-xs text-muted-foreground">{feature.desc}</div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Decorative corner */}
+            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${pillar.color} opacity-5 rounded-bl-full`} />
           </div>
         </div>
-
-        {/* Decorative corner */}
-        <div
-          className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${pillar.color} opacity-5 rounded-bl-full`}
-        />
-      </div>
-    </motion.div>
+      </FloatingCard>
+    </GSAPScrollReveal>
   );
 }
 
-// AI Feature Badge
-function AIFeatureBadge({
-  feature,
-  index,
-}: {
-  feature: (typeof aiCapabilities)[0];
-  index: number;
-}) {
+// ─── AI Feature Badge ────────────────────────────────────────────────
+function AIFeatureBadge({ feature, index }: { feature: (typeof aiCapabilities)[0]; index: number }) {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true });
 
@@ -254,90 +209,108 @@ function AIFeatureBadge({
       className="relative group"
     >
       <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-purple-500 rounded-2xl blur opacity-0 group-hover:opacity-50 transition-opacity" />
-      <div className="relative glass rounded-2xl p-5 border border-white/10">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center mb-4">
-          <feature.icon className="w-6 h-6 text-primary" />
+      <div className="relative glass-card rounded-2xl p-4 sm:p-5 border border-white/10 backdrop-blur-xl">
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center mb-3 sm:mb-4">
+          <feature.icon className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
         </div>
-        <h4 className="font-semibold mb-1">{feature.title}</h4>
-        <p className="text-sm text-muted-foreground">{feature.description}</p>
+        <h4 className="font-semibold text-sm sm:text-base mb-1">{feature.title}</h4>
+        <p className="text-xs sm:text-sm text-muted-foreground">{feature.description}</p>
       </div>
     </motion.div>
   );
 }
 
+// ─── FEATURES SECTION ────────────────────────────────────────────────
 export function FeaturesSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(sectionRef, { once: true, margin: "-100px" });
 
-  // Scroll-based zoom animation
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ["start end", "end start"],
-  });
+  // GSAP scroll-driven scale / opacity / y for the content wrapper
+  useGSAP(
+    () => {
+      if (!contentRef.current || !sectionRef.current) return;
 
-  // Scale up as entering view, peak at center, scale down as leaving
-  const scale = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0.85, 1, 1, 0.9]);
-  const opacity = useTransform(scrollYProgress, [0, 0.15, 0.85, 1], [0.3, 1, 1, 0.3]);
-  const y = useTransform(scrollYProgress, [0, 0.5, 1], [60, 0, -60]);
+      // Entrance: scale up, fade in, slide up
+      gsap.fromTo(
+        contentRef.current,
+        { scale: 0.85, opacity: 0.3, y: 60 },
+        {
+          scale: 1,
+          opacity: 1,
+          y: 0,
+          ease: "none",
+          scrollTrigger: {
+            trigger: sectionRef.current,
+            start: "top bottom",   // scrollYProgress 0
+            end: "30% center",     // scrollYProgress ~0.3
+            scrub: 1,
+          },
+        }
+      );
 
-  // Parallax for background glows
-  const bgY1 = useTransform(scrollYProgress, [0, 1], [-50, 100]);
-  const bgY2 = useTransform(scrollYProgress, [0, 1], [50, -100]);
+      // Exit: scale down, fade out, slide up
+      gsap.fromTo(
+        contentRef.current,
+        { scale: 1, opacity: 1, y: 0 },
+        {
+          scale: 0.9,
+          opacity: 0.3,
+          y: -60,
+          ease: "none",
+          scrollTrigger: {
+            trigger: sectionRef.current,
+            start: "70% center",   // scrollYProgress ~0.7
+            end: "bottom top",     // scrollYProgress 1
+            scrub: 1,
+          },
+        }
+      );
+    },
+    sectionRef,
+    []
+  );
 
   return (
-    <section ref={sectionRef} id="features" className="py-12 relative overflow-hidden">
-      {/* Background elements with parallax */}
+    <section ref={sectionRef} id="features" className="py-20 md:py-28 lg:py-32 relative overflow-hidden">
+      {/* Background with gradient mesh */}
       <div className="absolute inset-0 cyber-grid opacity-30" />
-      <motion.div
-        style={{ y: bgY1 }}
-        className="absolute top-0 left-1/4 w-48 sm:w-72 md:w-96 h-48 sm:h-72 md:h-96 bg-primary/10 rounded-full blur-3xl"
-      />
-      <motion.div
-        style={{ y: bgY2 }}
-        className="absolute bottom-0 right-1/4 w-40 sm:w-64 md:w-80 h-40 sm:h-64 md:h-80 bg-purple-500/10 rounded-full blur-3xl"
-      />
+      <AnimatedGradientMesh intensity={0.2} speed={0.8} blur={120} />
+      <GSAPParallax speed={0.375} direction="down" className="absolute top-0 left-1/4">
+        <div className="w-48 sm:w-72 md:w-96 h-48 sm:h-72 md:h-96 bg-primary/10 rounded-full blur-3xl" />
+      </GSAPParallax>
+      <GSAPParallax speed={0.375} direction="up" className="absolute bottom-0 right-1/4">
+        <div className="w-40 sm:w-64 md:w-80 h-40 sm:h-64 md:h-80 bg-purple-500/10 rounded-full blur-3xl" />
+      </GSAPParallax>
       <ConnectionLines />
 
-      <motion.div
+      <div
         ref={contentRef}
-        style={{ scale, opacity, y }}
+        style={{ willChange: "transform, opacity" }}
         className="container mx-auto px-4 relative z-10"
       >
-        {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-8 sm:mb-12 md:mb-16">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 glass-card px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-6"
-          >
-            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
-            <span>AI-Powered Platform</span>
-          </motion.div>
+        {/* Header */}
+        <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-14 md:mb-16">
+          <GSAPScrollReveal direction="up" distance={30} delay={0}>
+            <div className="inline-flex items-center gap-2 glass-card px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-6 border border-white/10 backdrop-blur-xl">
+              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary" />
+              <span>AI-Powered Platform</span>
+            </div>
+          </GSAPScrollReveal>
 
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 md:mb-6"
-          >
-            Three Pillars of
-            <span className="block gradient-text-animated">
-              Intelligent Wellness
-            </span>
-          </motion.h2>
+          <GSAPScrollReveal direction="up" distance={40} delay={0.1}>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 md:mb-6">
+              Three Pillars of
+              <span className="block gradient-text-animated">Intelligent Wellness</span>
+            </h2>
+          </GSAPScrollReveal>
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-sm sm:text-base md:text-lg text-muted-foreground px-2 sm:px-4"
-          >
-            Our AI seamlessly integrates fitness, nutrition, and wellbeing into
-            one unified coaching experience that understands the connections
-            between all aspects of your health.
-          </motion.p>
+          <GSAPScrollReveal direction="up" distance={40} delay={0.2}>
+            <p className="text-sm sm:text-base md:text-lg text-muted-foreground px-2 sm:px-4">
+              Our AI seamlessly integrates fitness, nutrition, and wellbeing into one unified coaching
+              experience that understands the connections between all aspects of your health.
+            </p>
+          </GSAPScrollReveal>
         </div>
 
         {/* Three Pillars Grid */}
@@ -355,21 +328,13 @@ export function FeaturesSection() {
           className="relative"
         >
           <div className="absolute -inset-1 bg-gradient-to-r from-primary via-purple-500 to-pink-500 rounded-2xl sm:rounded-3xl blur-xl opacity-20" />
-          <div className="relative glass-card rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 lg:p-12 border border-white/10 overflow-hidden">
-            {/* Background animation */}
+          <div className="relative glass-card rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 lg:p-12 border border-white/10 backdrop-blur-xl overflow-hidden">
             <div className="absolute inset-0">
               <motion.div
                 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full"
-                style={{
-                  background:
-                    "radial-gradient(circle, oklch(0.75 0.15 180 / 0.1) 0%, transparent 70%)",
-                }}
+                style={{ background: "radial-gradient(circle, oklch(0.75 0.15 180 / 0.1) 0%, transparent 70%)" }}
                 animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
-                transition={{
-                  duration: 4,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
               />
             </div>
 
@@ -384,30 +349,23 @@ export function FeaturesSection() {
                   <Brain className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-white" />
                 </motion.div>
                 <h3 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2 sm:mb-3">
-                  Powered by{" "}
-                  <span className="gradient-text">Invisible Intelligence</span>
+                  Powered by <span className="gradient-text">Invisible Intelligence</span>
                 </h3>
                 <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto px-2">
-                  Our AI works quietly in the background, analyzing patterns
-                  across all three pillars to deliver insights impossible to
-                  discover alone.
+                  Our AI works quietly in the background, analyzing patterns across all three pillars
+                  to deliver insights impossible to discover alone.
                 </p>
               </div>
 
-              {/* AI Capabilities Grid */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
                 {aiCapabilities.map((feature, index) => (
-                  <AIFeatureBadge
-                    key={feature.title}
-                    feature={feature}
-                    index={index}
-                  />
+                  <AIFeatureBadge key={feature.title} feature={feature} index={index} />
                 ))}
               </div>
             </div>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
     </section>
   );
 }

@@ -6,6 +6,8 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { logger } from '../services/logger.service.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 import { notificationService } from '../services/notification.service.js';
+import { embeddingQueueService } from '../services/embedding-queue.service.js';
+import { JobPriorities } from '../config/queue.config.js';
 import type {
   NotificationPreferencesInput,
   CoachingPreferencesInput,
@@ -56,6 +58,8 @@ interface UserPreferencesRow {
   sync_on_wifi_only: boolean;
   background_sync_enabled: boolean;
   data_retention_days: number;
+  voice_assistant_avatar_url: string | null;
+  voice_assistant_name: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -164,6 +168,10 @@ function transformPreferencesToAPI(prefs: UserPreferencesRow) {
       backgroundSyncEnabled: prefs.background_sync_enabled,
       dataRetentionDays: prefs.data_retention_days,
     },
+    voiceAssistant: {
+      avatarUrl: prefs.voice_assistant_avatar_url,
+      assistantName: prefs.voice_assistant_name || 'Aurea',
+    },
     createdAt: prefs.created_at,
     updatedAt: prefs.updated_at,
   };
@@ -268,6 +276,15 @@ export const updateNotificationPreferences = asyncHandler(
     );
 
     logger.info('Notification preferences updated', { userId });
+
+    // Enqueue embedding update for preferences (async, non-blocking)
+    await embeddingQueueService.enqueueEmbedding({
+      userId,
+      sourceType: 'user_preferences',
+      sourceId: updateResult.rows[0].id,
+      operation: 'update',
+      priority: JobPriorities.LOW,
+    });
 
     const formattedPreferences = transformPreferencesToAPI(updateResult.rows[0]);
 
@@ -397,6 +414,15 @@ export const updateCoachingPreferences = asyncHandler(
       intensity: data.intensity,
     });
 
+    // Enqueue embedding update for preferences (async, non-blocking)
+    await embeddingQueueService.enqueueEmbedding({
+      userId,
+      sourceType: 'user_preferences',
+      sourceId: updateResult.rows[0].id,
+      operation: 'update',
+      priority: JobPriorities.LOW,
+    });
+
     // Send notification for preference update
     const updatedFields: string[] = [];
     if (data.style) updatedFields.push('coachingStyle');
@@ -490,6 +516,15 @@ export const updateDisplayPreferences = asyncHandler(
 
     logger.info('Display preferences updated', { userId });
 
+    // Enqueue embedding update for preferences (async, non-blocking)
+    await embeddingQueueService.enqueueEmbedding({
+      userId,
+      sourceType: 'user_preferences',
+      sourceId: updateResult.rows[0].id,
+      operation: 'update',
+      priority: JobPriorities.LOW,
+    });
+
     const formattedPreferences = transformPreferencesToAPI(updateResult.rows[0]);
 
     ApiResponse.success(res, {
@@ -554,6 +589,15 @@ export const updatePrivacyPreferences = asyncHandler(
 
     logger.info('Privacy preferences updated', { userId });
 
+    // Enqueue embedding update for preferences (async, non-blocking)
+    await embeddingQueueService.enqueueEmbedding({
+      userId,
+      sourceType: 'user_preferences',
+      sourceId: updateResult.rows[0].id,
+      operation: 'update',
+      priority: JobPriorities.LOW,
+    });
+
     const formattedPreferences = transformPreferencesToAPI(updateResult.rows[0]);
 
     ApiResponse.success(res, {
@@ -617,6 +661,15 @@ export const updateIntegrationPreferences = asyncHandler(
     );
 
     logger.info('Integration preferences updated', { userId });
+
+    // Enqueue embedding update for preferences (async, non-blocking)
+    await embeddingQueueService.enqueueEmbedding({
+      userId,
+      sourceType: 'user_preferences',
+      sourceId: updateResult.rows[0].id,
+      operation: 'update',
+      priority: JobPriorities.LOW,
+    });
 
     const formattedPreferences = transformPreferencesToAPI(updateResult.rows[0]);
 
@@ -814,6 +867,24 @@ export const updateAllPreferences = asyncHandler(
       }
     }
 
+    // Voice Assistant
+    if (data.voiceAssistant) {
+      if (data.voiceAssistant.avatarUrl !== undefined) {
+        updates.push(`voice_assistant_avatar_url = $${paramIndex++}`);
+        const avatarUrl = data.voiceAssistant.avatarUrl;
+        if (avatarUrl !== null && avatarUrl !== undefined) {
+          values.push(avatarUrl);
+        } else {
+          values.push(null as any);
+        }
+      }
+      if (data.voiceAssistant.assistantName !== undefined) {
+        updates.push(`voice_assistant_name = $${paramIndex++}`);
+        const assistantName = (data.voiceAssistant.assistantName || '').trim() || 'Aurea';
+        values.push(assistantName);
+      }
+    }
+
     updates.push('updated_at = CURRENT_TIMESTAMP');
     values.push(userId);
 
@@ -823,6 +894,15 @@ export const updateAllPreferences = asyncHandler(
     );
 
     logger.info('All preferences updated', { userId });
+
+    // Enqueue embedding update for preferences (async, non-blocking)
+    await embeddingQueueService.enqueueEmbedding({
+      userId,
+      sourceType: 'user_preferences',
+      sourceId: updateResult.rows[0].id,
+      operation: 'update',
+      priority: JobPriorities.LOW,
+    });
 
     const formattedPreferences = transformPreferencesToAPI(updateResult.rows[0]);
 
@@ -893,6 +973,31 @@ export const resetPreferences = asyncHandler(async (req: AuthenticatedRequest, r
   ApiResponse.success(res, { preferences: formattedPreferences }, 'Preferences reset to defaults');
 });
 
+/**
+ * Update product tour completion status
+ * PATCH /api/preferences/tour-status
+ */
+export const updateTourStatus = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw ApiError.unauthorized();
+
+  const { completed } = req.body;
+  if (typeof completed !== 'boolean') {
+    throw ApiError.badRequest('completed must be a boolean');
+  }
+
+  await query(
+    `UPDATE user_preferences
+     SET product_tour_completed = $1,
+         product_tour_completed_at = CASE WHEN $1 = true THEN NOW() ELSE product_tour_completed_at END,
+         updated_at = NOW()
+     WHERE user_id = $2`,
+    [completed, userId]
+  );
+
+  ApiResponse.success(res, { product_tour_completed: completed }, 'Tour status updated');
+});
+
 export default {
   getPreferences,
   updateNotificationPreferences,
@@ -904,4 +1009,5 @@ export default {
   updateAllPreferences,
   completePreferencesStep,
   resetPreferences,
+  updateTourStatus,
 };

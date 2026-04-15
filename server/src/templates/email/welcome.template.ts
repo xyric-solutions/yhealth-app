@@ -26,11 +26,11 @@ export function welcomeTemplate(data: WelcomeEmailData): string {
     </div>
 
     <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 26px;">
-      Welcome to <strong>yHealth</strong> - where invisible intelligence meets visible coaching. We're thrilled to have you join thousands of users who are transforming their lives through personalized AI guidance.
+      Welcome to <strong>Balencia</strong> - where invisible intelligence meets visible coaching. We're thrilled to have you join thousands of users who are transforming their lives through personalized AI guidance.
     </p>
 
     <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 26px;">
-      yHealth isn't just another health app. We're your trusted companion that connects your <strong>Physical Fitness</strong>, <strong>Nutrition</strong>, and <strong>Daily Wellbeing</strong> to reveal insights you couldn't discover alone.
+      Balencia isn't just another health app. We're your trusted companion that connects your <strong>Physical Fitness</strong>, <strong>Nutrition</strong>, and <strong>Daily Wellbeing</strong> to reveal insights you couldn't discover alone.
     </p>
 
     <!-- Three Pillars -->
@@ -57,7 +57,7 @@ export function welcomeTemplate(data: WelcomeEmailData): string {
       </tr>
     </table>
 
-    <h2 style="margin: 32px 0 16px 0; font-size: 20px; color: ${BRAND_COLORS.dark};">What makes yHealth special:</h2>
+    <h2 style="margin: 32px 0 16px 0; font-size: 20px; color: ${BRAND_COLORS.dark};">What makes Balencia special:</h2>
 
     ${featureBox('', 'Talk to Your Coach Anytime', 'Available 24/7 via Voice, WhatsApp, or App - get coaching when you need it')}
     ${featureBox('', 'Connect Everything', 'Sync WHOOP, Fitbit, Garmin, Oura & more for unified insights')}
@@ -75,8 +75,8 @@ export function welcomeTemplate(data: WelcomeEmailData): string {
   `;
 
   return baseEmailLayout({
-    preheader: `Welcome to yHealth, ${firstName}! Your AI Life Coach is ready to help you achieve your goals.`,
-    title: 'Welcome to yHealth!',
+    preheader: `Welcome to Balencia, ${firstName}! Your AI Life Coach is ready to help you achieve your goals.`,
+    title: 'Welcome to Balencia!',
     greeting: `Welcome aboard, ${firstName}!`,
     content,
     ctaButton: {
@@ -120,7 +120,7 @@ export function assessmentReminderTemplate(data: {
 
   return baseEmailLayout({
     preheader: `${firstName}, complete your assessment to unlock personalized AI coaching`,
-    title: 'Complete Your Assessment - yHealth',
+    title: 'Complete Your Assessment - Balencia',
     greeting: `Hey ${firstName}!`,
     content,
     ctaButton: {
@@ -159,7 +159,7 @@ export function integrationReminderTemplate(data: {
     <p style="margin: 0 0 20px 0;">
       ${connectedCount > 0
         ? `Great job connecting ${connectedCount} device${connectedCount > 1 ? 's' : ''}! Want to unlock even more insights?`
-        : 'Connect your fitness devices and apps to unlock the full power of yHealth\'s cross-domain insights.'}
+        : 'Connect your fitness devices and apps to unlock the full power of Balencia\'s cross-domain insights.'}
     </p>
 
     ${alertBox('success', '<strong>Did you know?</strong> Users who connect 2+ devices discover 3x more actionable insights about their health patterns.')}
@@ -181,7 +181,7 @@ export function integrationReminderTemplate(data: {
 
   return baseEmailLayout({
     preheader: `${firstName}, connect your devices to unlock powerful health insights`,
-    title: 'Connect Your Devices - yHealth',
+    title: 'Connect Your Devices - Balencia',
     greeting: `Hi ${firstName},`,
     content,
     ctaButton: {
@@ -239,7 +239,7 @@ export function goalSetTemplate(data: {
 
   return baseEmailLayout({
     preheader: `${firstName}, you've set your first goal! Your AI coach is ready to help.`,
-    title: 'Goal Set! - yHealth',
+    title: 'Goal Set! - Balencia',
     greeting: `Amazing, ${firstName}!`,
     content,
     ctaButton: {

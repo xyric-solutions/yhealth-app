@@ -1,0 +1,26 @@
+diff --git a/node_modules/@pixiv/three-vrm-materials-mtoon/lib/three-vrm-materials-mtoon.cjs b/node_modules/@pixiv/three-vrm-materials-mtoon/lib/three-vrm-materials-mtoon.cjs
+index 6f8b328..3943db1 100644
+--- a/node_modules/@pixiv/three-vrm-materials-mtoon/lib/three-vrm-materials-mtoon.cjs
++++ b/node_modules/@pixiv/three-vrm-materials-mtoon/lib/three-vrm-materials-mtoon.cjs
+@@ -129,7 +129,7 @@ var GLTFMToonMaterialParamsAssignHelper = class {
+       const promise = (() => __async(this, null, function* () {
+         if (texture != null) {
+           yield this._parser.assignTexture(this._materialParams, key, texture);
+-          if (isColorTexture) {
++          if (isColorTexture && this._materialParams[key]) {
+             setTextureColorSpace(this._materialParams[key], "srgb");
+           }
+         }
+diff --git a/node_modules/@pixiv/three-vrm-materials-mtoon/lib/three-vrm-materials-mtoon.module.js b/node_modules/@pixiv/three-vrm-materials-mtoon/lib/three-vrm-materials-mtoon.module.js
+index d317220..2ba69ad 100644
+--- a/node_modules/@pixiv/three-vrm-materials-mtoon/lib/three-vrm-materials-mtoon.module.js
++++ b/node_modules/@pixiv/three-vrm-materials-mtoon/lib/three-vrm-materials-mtoon.module.js
+@@ -93,7 +93,7 @@ var GLTFMToonMaterialParamsAssignHelper = class {
+       const promise = (() => __async(this, null, function* () {
+         if (texture != null) {
+           yield this._parser.assignTexture(this._materialParams, key, texture);
+-          if (isColorTexture) {
++          if (isColorTexture && this._materialParams[key]) {
+             setTextureColorSpace(this._materialParams[key], "srgb");
+           }
+         }

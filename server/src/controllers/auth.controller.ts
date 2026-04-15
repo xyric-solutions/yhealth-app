@@ -27,6 +27,8 @@ import type {
   UpdateProfileInput,
 } from "../validators/auth.validator.js";
 import { comparePassword, hashPassword } from "@/helper/encryption.js";
+import { getPublicProfile as getPublicProfileHelper } from '../utils/user.helpers.js';
+import type { MappedUser } from '../database/schemas/index.js';
 
 // Activation token payload type
 interface ActivationTokenPayload {
@@ -117,7 +119,7 @@ interface WhatsAppRow {
 const CONSENT_VERSION = "1.0.0";
 
 // Helper to convert snake_case to camelCase user
-function mapUserRow(row: UserRow) {
+function mapUserRow(row: UserRow): MappedUser {
   return {
     id: row.id,
     email: row.email,
@@ -142,23 +144,9 @@ function mapUserRow(row: UserRow) {
   };
 }
 
-// Helper to get public profile
-function getPublicProfile(user: ReturnType<typeof mapUserRow>) {
-  return {
-    id: user.id,
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    dateOfBirth: user.dateOfBirth,
-    gender: user.gender,
-    phone: user.phone,
-    role: user.role,
-    avatarUrl: user.avatar,
-    isEmailVerified: user.isEmailVerified,
-    onboardingStatus: user.onboardingStatus,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-  };
+// Helper to get public profile - uses helper from user.helpers.ts to ensure avatar URLs don't expire
+function getPublicProfile(user: MappedUser) {
+  return getPublicProfileHelper(user);
 }
 
 // Helper to check if user has consent
@@ -255,51 +243,57 @@ export const verifyRegistration = asyncHandler(
 
     const userData = decoded.user;
 
-    // Check if email was registered in the meantime (race condition protection)
-    const existingResult = await query<UserRow>(
-      "SELECT id FROM users WHERE email = $1",
-      [userData.email]
-    );
+    // Create user with preferences in a transaction
+    // Let the database unique constraint handle race conditions
+    let user;
+    try {
+      user = await transaction(async (client) => {
+        const userResult = await client.query<UserRow>(
+          `INSERT INTO users (
+          email, password, first_name, last_name, date_of_birth, gender,
+          auth_provider, onboarding_status, is_email_verified
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING *`,
+          [
+            userData.email,
+            userData.password, 
+            userData.firstName,
+            userData.lastName,
+            new Date(userData.dateOfBirth),
+            userData.gender,
+            "local",
+            "consent_pending",
+            true, 
+          ]
+        );
 
-    if (existingResult.rows.length > 0) {
-      throw ApiError.conflict(
-        "This email is already registered. Sign in or reset password?"
-      );
+        const newUser = userResult.rows[0];
+
+        // Create default preferences
+        await client.query("INSERT INTO user_preferences (user_id) VALUES ($1)", [
+          newUser.id,
+        ]);
+
+        return mapUserRow(newUser);
+      });
+    } catch (err) {
+      // Handle unique constraint violation (code 23505) - email already exists
+      if ((err as { code?: string }).code === '23505') {
+        throw ApiError.conflict(
+          "This email is already registered. Sign in or reset password?"
+        );
+      }
+      throw err;
     }
 
-    // Create user with preferences in a transaction
-    const user = await transaction(async (client) => {
-      const userResult = await client.query<UserRow>(
-        `INSERT INTO users (
-        email, password, first_name, last_name, date_of_birth, gender,
-        auth_provider, onboarding_status, is_email_verified
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *`,
-        [
-          userData.email,
-          userData.password, // Already hashed
-          userData.firstName,
-          userData.lastName,
-          new Date(userData.dateOfBirth),
-          userData.gender,
-          "local",
-          "consent_pending",
-          true, // Email is verified since they confirmed OTP
-        ]
-      );
-
-      const newUser = userResult.rows[0];
-
-      // Create default preferences
-      await client.query("INSERT INTO user_preferences (user_id) VALUES ($1)", [
-        newUser.id,
-      ]);
-
-      return mapUserRow(newUser);
+    // Send welcome email (non-blocking - don't fail registration if email fails)
+    emailService.sendWelcomeEmail(user.email, user.firstName).catch((error) => {
+      logger.warn('Failed to send welcome email (non-blocking)', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userId: user.id,
+        email: user.email,
+      });
     });
-
-    // Send welcome email
-    await emailService.sendWelcomeEmail(user.email, user.firstName);
 
     // Send welcome notification
     await notificationService.welcomeUser(user.id, user.firstName);
@@ -389,12 +383,15 @@ export const socialAuth = asyncHandler(
       logger.info("Social sign-in", { userId: user.id, provider });
     } else {
       // New user - create account
+      // Default role ID for regular users
+      const DEFAULT_USER_ROLE_ID = '11111111-1111-1111-1111-111111111101';
+      
       const newUserResult = await transaction(async (client) => {
         const userResult = await client.query<UserRow>(
           `INSERT INTO users (
           email, first_name, last_name, avatar, auth_provider, provider_id,
-          is_email_verified, onboarding_status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          is_email_verified, onboarding_status, role_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *`,
           [
             email,
@@ -405,6 +402,7 @@ export const socialAuth = asyncHandler(
             providerId,
             true,
             "consent_pending",
+            DEFAULT_USER_ROLE_ID,
           ]
         );
 
@@ -422,9 +420,15 @@ export const socialAuth = asyncHandler(
       user = newUserResult;
       isNewUser = true;
 
-      // Send welcome email
+      // Send welcome email (non-blocking - don't fail registration if email fails)
       if (user.firstName) {
-        await emailService.sendWelcomeEmail(user.email, user.firstName);
+        emailService.sendWelcomeEmail(user.email, user.firstName).catch((error) => {
+          logger.warn('Failed to send welcome email (non-blocking)', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            userId: user.id,
+            email: user.email,
+          });
+        });
       }
 
       // Send welcome notification
@@ -579,9 +583,15 @@ export const submitConsent = asyncHandler(
       );
     });
 
-    // Send welcome email if not already sent
+    // Send welcome email if not already sent (non-blocking - don't fail if email fails)
     if (!user.isEmailVerified && user.authProvider === "local") {
-      await emailService.sendWelcomeEmail(user.email, user.firstName);
+      emailService.sendWelcomeEmail(user.email, user.firstName).catch((error) => {
+        logger.warn('Failed to send welcome email (non-blocking)', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          userId,
+          email: user.email,
+        });
+      });
     }
 
     const updatedUserResult = await query<UserRow>(
@@ -804,9 +814,11 @@ export const login = asyncHandler(
       throw ApiError.unauthorized("Invalid email or password");
     }
 
-    // Check if account is active
+    // Check if account is active (blocked)
     if (!user.isActive) {
-      throw ApiError.forbidden("Your account has been deactivated");
+      throw ApiError.forbidden(
+        "Your account has been blocked. Please contact our help center for assistance."
+      );
     }
 
     // Generate tokens
@@ -1004,6 +1016,16 @@ export const getCurrentUser = asyncHandler(
     const userId = req.user?.userId;
     if (!userId) throw ApiError.unauthorized();
 
+    // Check cache first (10 second TTL for user profile)
+    const { cache } = await import('../services/cache.service.js');
+    const cacheKey = `user:profile:${userId}`;
+    const cached = cache.get<{ user: ReturnType<typeof getPublicProfile> }>(cacheKey);
+    
+    if (cached) {
+      ApiResponse.success(res, cached);
+      return;
+    }
+
     const userResult = await query<UserRow>(
       "SELECT * FROM users WHERE id = $1",
       [userId]
@@ -1012,10 +1034,14 @@ export const getCurrentUser = asyncHandler(
     if (userResult.rows.length === 0) throw ApiError.notFound("User not found");
 
     const user = mapUserRow(userResult.rows[0]);
-
-    ApiResponse.success(res, {
+    const responseData = {
       user: getPublicProfile(user),
-    });
+    };
+    
+    // Cache the response for 10 seconds
+    cache.set(cacheKey, responseData, 10);
+
+    ApiResponse.success(res, responseData);
   }
 );
 
@@ -1064,13 +1090,6 @@ export const getOnboardingStatus = asyncHandler(
           user.onboardingStatus !== "assessment_pending",
         goals: [
           "goals_pending",
-          "integrations_pending",
-          "preferences_pending",
-          "plan_pending",
-          "completed",
-        ].includes(user.onboardingStatus),
-        integrations: [
-          "integrations_pending",
           "preferences_pending",
           "plan_pending",
           "completed",

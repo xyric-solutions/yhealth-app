@@ -77,6 +77,12 @@ export const integrationPreferencesSchema = z.object({
   dataRetentionDays: z.number().int().min(30).max(3650).default(365),
 });
 
+// Voice Assistant preferences
+export const voiceAssistantPreferencesSchema = z.object({
+  avatarUrl: z.string().url().nullable().optional(),
+  assistantName: z.string().min(1).max(100).optional(),
+});
+
 // Full preferences update
 export const updatePreferencesSchema = z.object({
   notifications: notificationPreferencesSchema.optional(),
@@ -84,6 +90,7 @@ export const updatePreferencesSchema = z.object({
   display: displayPreferencesSchema.optional(),
   privacy: privacyPreferencesSchema.optional(),
   integrations: integrationPreferencesSchema.optional(),
+  voiceAssistant: voiceAssistantPreferencesSchema.optional(),
 });
 
 // Types
@@ -92,4 +99,5 @@ export type CoachingPreferencesInput = z.infer<typeof coachingPreferencesSchema>
 export type DisplayPreferencesInput = z.infer<typeof displayPreferencesSchema>;
 export type PrivacyPreferencesInput = z.infer<typeof privacyPreferencesSchema>;
 export type IntegrationPreferencesInput = z.infer<typeof integrationPreferencesSchema>;
+export type VoiceAssistantPreferencesInput = z.infer<typeof voiceAssistantPreferencesSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;

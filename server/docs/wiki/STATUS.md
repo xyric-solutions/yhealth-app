@@ -2,7 +2,7 @@
 
 ## Current Status: Authentication & Profile Management Complete
 
-**Last Updated:** December 19, 2025
+**Last Updated:** February 12, 2026
 
 ---
 
@@ -14,12 +14,12 @@ Overall Project Progress
 
 Epic 01: Onboarding    [####################] 100% ✅ COMPLETE
 Epic 02: Engagement    [                    ]   0% 🔵 PLANNED
-Epic 03: Insights      [                    ]   0% 🔵 PLANNED
-Epic 04: Premium       [                    ]   0% 🔵 PLANNED
-Epic 05: Social        [                    ]   0% 🔵 PLANNED
-Epic 06: AI            [                    ]   0% 🔵 PLANNED
+Epic 03: Insights       [                    ]   0% 🔵 PLANNED
+Epic 04: Premium        [##########          ]  50% 🟡 IN PROGRESS
+Epic 05: Social         [                    ]   0% 🔵 PLANNED
+Epic 06: AI             [                    ]   0% 🔵 PLANNED
 
-Total: ~17% Complete (1 of 6 Epics)
+Total: ~25% Complete (1 of 6 Epics + Premium started)
 ```
 
 ---
@@ -157,6 +157,23 @@ Coverage:          📊 Pending measurement
 | Plans | 9 | ✅ |
 | Upload | 1 | ✅ |
 | **Total** | **53** | ✅ |
+
+---
+
+## Recent Updates (February 12, 2026)
+
+### Subscription & Payments (Epic 04 – Premium)
+| Feature | Status |
+|---------|--------|
+| Subscription management page (manage, cancel, timer, invoice) | ✅ Complete |
+| Dynamic pricing from API; Plans page (`/plans`) | ✅ Complete |
+| Payment success page; verify-session; Stripe one-time & subscription | ✅ Complete |
+| Subscription in nav only when subscribed | ✅ Complete |
+| Admin: subscriptions list, plans; Admin: visitor analytics | ✅ Complete |
+| Visitor tracking (visits, analytics API) | ✅ Complete |
+| Seed: Free, 1 Month, 3 Month plans; 1 week trial | ✅ Complete |
+
+See [CHANGELOG-2026-02-12.md](../../../../CHANGELOG-2026-02-12.md) for full details.
 
 ---
 
@@ -330,11 +347,12 @@ JWT_REFRESH_SECRET=<32+ characters>
 
 ---
 
-*Status Last Updated: December 19, 2025*
-*Next Review: When Epic 02 begins*
+*Status Last Updated: February 12, 2026*
+*Next Review: When Epic 02 begins or Epic 04 continues*
 
 ---
 
 ## Changelog
 
+- [February 12, 2026](../../../../CHANGELOG-2026-02-12.md) - Subscription management, Stripe payments, plans page, visitor analytics, build fixes
 - [December 19, 2025](./CHANGELOG-2025-12-19.md) - Authentication, Profile Management, Password Reset

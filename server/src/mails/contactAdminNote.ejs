@@ -1,0 +1,247 @@
+<%# Admin Note Notification Email Template %>
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+  <title>Update on Your Inquiry - yHealth</title>
+  <style>
+    html, body { margin: 0 !important; padding: 0 !important; height: 100% !important; width: 100% !important; }
+    * { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; }
+    table { border-spacing: 0 !important; border-collapse: collapse !important; table-layout: fixed !important; margin: 0 auto !important; }
+    img { -ms-interpolation-mode: bicubic; }
+    a { text-decoration: none; }
+    @media screen and (max-width: 600px) {
+      .email-container { width: 100% !important; margin: auto !important; }
+      .mobile-padding { padding: 20px !important; }
+    }
+  </style>
+</head>
+<body width="100%" style="margin: 0; padding: 0 !important; mso-line-height-rule: exactly; background-color: #F9FAFB;">
+  <div style="display: none; font-size: 1px; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
+    We have an update on your inquiry: <%= subject %>. Please check the details below.
+  </div>
+
+  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; background-color: #F9FAFB;">
+    <table align="center" role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: auto;" class="email-container">
+      <!-- Header with Logo -->
+      <tr>
+        <td style="padding: 30px 0; text-align: center;">
+          <div style="font-size: 32px; font-weight: 800; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; letter-spacing: -1px;">
+            <span style="color: #6366F1;">y</span><span style="color: #1F2937;">Health</span>
+          </div>
+          <div style="font-size: 12px; color: #6B7280; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin-top: 4px; text-transform: uppercase; letter-spacing: 2px;">
+            Your AI Life Coach
+          </div>
+        </td>
+      </tr>
+
+      <!-- Main Content Card -->
+      <tr>
+        <td style="padding: 0 20px;">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #FFFFFF; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+            <!-- Gradient Top Bar -->
+            <tr>
+              <td style="height: 6px; background: linear-gradient(135deg, #10B981 0%, #059669 50%, #047857 100%); border-radius: 16px 16px 0 0;"></td>
+            </tr>
+
+            <!-- Content -->
+            <tr>
+              <td style="padding: 40px 40px 20px 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;" class="mobile-padding">
+                <div style="text-align: center; margin-bottom: 32px;">
+                  <div style="font-size: 64px; margin-bottom: 16px;">📝</div>
+                  <h1 style="margin: 0 0 8px 0; font-size: 28px; font-weight: 700; color: #1F2937; line-height: 1.3;">
+                    Update on Your Inquiry
+                  </h1>
+                  <p style="margin: 0; font-size: 18px; color: #6B7280;">
+                    Hello <%= name %>, we have an update for you
+                  </p>
+                </div>
+
+                <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 26px; color: #4B5563;">
+                  Our support team has added an update to your inquiry. Please review the details below:
+                </p>
+
+                <!-- Original Inquiry Card -->
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 32px 0; background: #F9FAFB; border-radius: 12px; padding: 20px; border-left: 4px solid #6366F1;">
+                  <tr>
+                    <td>
+                      <p style="margin: 0 0 12px 0; font-weight: 600; color: #1F2937; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Your Original Inquiry
+                      </p>
+                      <p style="margin: 0 0 8px 0; font-size: 15px; color: #1F2937; font-weight: 600;"><%= subject %></p>
+                      <p style="margin: 0; font-size: 14px; color: #6B7280; line-height: 20px; white-space: pre-wrap;"><%= message %></p>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Admin Update Card -->
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 32px 0; background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%); border-radius: 12px; padding: 24px; border-left: 4px solid #10B981;">
+                  <tr>
+                    <td>
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <tr>
+                          <td width="48" valign="top" style="padding-right: 16px;">
+                            <div style="width: 48px; height: 48px; background: #10B981; border-radius: 12px; text-align: center; line-height: 48px; font-size: 24px;">💬</div>
+                          </td>
+                          <td valign="top">
+                            <p style="margin: 0 0 12px 0; font-weight: 600; color: #1F2937; font-size: 16px;">
+                              Team Update
+                            </p>
+                            <div style="background: #FFFFFF; border-radius: 8px; padding: 16px; margin-top: 8px;">
+                              <p style="margin: 0; font-size: 15px; color: #1F2937; line-height: 24px; white-space: pre-wrap;"><%= adminNote %></p>
+                            </div>
+                            <% if (typeof adminName !== 'undefined' && adminName) { %>
+                            <p style="margin: 12px 0 0 0; font-size: 13px; color: #6B7280;">
+                              — <%= adminName %><% if (typeof adminRole !== 'undefined' && adminRole) { %>, <%= adminRole %><% } %>
+                            </p>
+                            <% } %>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Status Update (if provided) -->
+                <% if (typeof status !== 'undefined' && status) { %>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 24px 0;">
+                  <tr>
+                    <td style="padding: 16px; background: #F3F4F6; border-radius: 12px;">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <tr>
+                          <td>
+                            <p style="margin: 0 0 4px 0; font-size: 13px; color: #6B7280; font-weight: 500;">Current Status</p>
+                            <p style="margin: 0; font-size: 16px; color: #1F2937; font-weight: 600; text-transform: capitalize;">
+                              <%= status.replace('_', ' ') %>
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+                <% } %>
+
+                <!-- Next Steps -->
+                <div style="margin: 32px 0; padding: 24px; background: #F9FAFB; border-radius: 12px;">
+                  <h2 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600; color: #1F2937;">What you can do:</h2>
+
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr>
+                      <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB;">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                          <tr>
+                            <td width="32" valign="top">
+                              <div style="width: 24px; height: 24px; background: #10B981; border-radius: 50%; text-align: center; line-height: 24px; color: #FFFFFF; font-weight: 600; font-size: 12px;">✓</div>
+                            </td>
+                            <td valign="top">
+                              <p style="margin: 0; font-size: 14px; color: #4B5563; line-height: 20px;">Review the update above and follow any instructions provided</p>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 12px 0; border-bottom: 1px solid #E5E7EB;">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                          <tr>
+                            <td width="32" valign="top">
+                              <div style="width: 24px; height: 24px; background: #10B981; border-radius: 50%; text-align: center; line-height: 24px; color: #FFFFFF; font-weight: 600; font-size: 12px;">✓</div>
+                            </td>
+                            <td valign="top">
+                              <p style="margin: 0; font-size: 14px; color: #4B5563; line-height: 20px;">If you have additional questions, reply to this email or submit a new inquiry</p>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 12px 0;">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                          <tr>
+                            <td width="32" valign="top">
+                              <div style="width: 24px; height: 24px; background: #10B981; border-radius: 50%; text-align: center; line-height: 24px; color: #FFFFFF; font-weight: 600; font-size: 12px;">✓</div>
+                            </td>
+                            <td valign="top">
+                              <p style="margin: 0; font-size: 14px; color: #4B5563; line-height: 20px;">We'll continue to keep you updated as we work on resolving your inquiry</p>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+
+                <!-- CTA Button -->
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 32px 0;">
+                  <tr>
+                    <td align="center">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                        <tr>
+                          <td style="border-radius: 12px; background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #A855F7 100%);">
+                            <a href="<%= typeof dashboardUrl !== 'undefined' ? dashboardUrl : '#' %>" target="_blank" style="display: inline-block; padding: 16px 40px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #FFFFFF; text-decoration: none; border-radius: 12px;">
+                              View in Dashboard
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Secondary Content -->
+                <div style="font-size: 14px; line-height: 22px; color: #6B7280; margin-top: 24px; padding-top: 24px; border-top: 1px solid #E5E7EB;">
+                  <p style="margin: 0 0 8px 0; font-weight: 600; color: #1F2937;">
+                    Need more help?
+                  </p>
+                  <p style="margin: 0; font-size: 14px;">
+                    If you have any questions about this update or need further assistance, please don't hesitate to <a href="<%= typeof contactUrl !== 'undefined' ? contactUrl : '#' %>" style="color: #6366F1; font-weight: 600;">contact us</a> or reply directly to this email.
+                  </p>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Footer inside card -->
+            <tr>
+              <td style="padding: 20px 40px 40px 40px;" class="mobile-padding">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                  <tr>
+                    <td style="padding-top: 24px; border-top: 1px solid #E5E7EB;">
+                      <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #6B7280;">
+                        This is an automated notification about your inquiry. You can reply to this email to continue the conversation with our support team.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Footer -->
+      <tr>
+        <td style="padding: 30px 20px;">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+            <tr>
+              <td style="text-align: center;">
+                <p style="margin: 0 0 8px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; color: #6B7280;">
+                  yHealth by Xyric Solutions
+                </p>
+                <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; color: #9CA3AF;">
+                  Your AI Life Coach - Powered by invisible intelligence
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </center>
+</body>
+</html>

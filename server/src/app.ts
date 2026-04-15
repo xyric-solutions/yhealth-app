@@ -20,6 +20,7 @@ import {
 import { requestIdMiddleware } from "./middlewares/requestId.middleware.js";
 import { globalLimiter } from "./middlewares/rateLimiter.middleware.js";
 import routes from "./routes/index.js";
+import stripeWebhookRoutes from "./routes/webhooks/stripe.routes.js";
 
 // Setup uncaught exception handlers
 setupUncaughtHandlers();
@@ -33,15 +34,32 @@ export function createApp(): Application {
   // Trust proxy (for rate limiting, secure cookies behind reverse proxy)
   app.set("trust proxy", 1);
 
-  // Security middleware
+  // Security middleware — hardened headers
   app.use(
     helmet({
-      contentSecurityPolicy: env.isProduction,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:", "https:"],
+          connectSrc: ["'self'", "wss:", "ws:", "https:"],
+          fontSrc: ["'self'", "https:", "data:"],
+          objectSrc: ["'none'"],
+          frameSrc: ["'none'"],
+        },
+      },
       crossOriginEmbedderPolicy: false,
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     })
   );
 
-  // CORS configuration
+  // CORS configuration — no wildcard with credentials
   app.use(
     cors({
       origin: (origin, callback) => {
@@ -51,7 +69,11 @@ export function createApp(): Application {
           return;
         }
 
-        if (env.cors.origin.includes(origin) || env.cors.origin.includes("*")) {
+        // Strict origin check — no wildcard bypass
+        if (env.cors.origin.includes(origin)) {
+          callback(null, true);
+        } else if (!env.isProduction && env.cors.origin.includes("*")) {
+          // Only allow wildcard in development
           callback(null, true);
         } else {
           callback(new Error("Not allowed by CORS"));
@@ -84,18 +106,29 @@ export function createApp(): Application {
         return compression.filter(req, res);
       },
       level: 6,
-      threshold: 1024, // Only compress responses > 1KB
+      threshold: 1024, 
     })
   );
 
   // Request ID middleware
   app.use(requestIdMiddleware);
 
-  // Body parsing
+  // Stripe webhook (raw body required for signature verification) - must be before express.json
+  app.use(
+    env.api.prefix + "/webhooks/stripe",
+    express.raw({ type: "application/json" }),
+    stripeWebhookRoutes
+  );
+
+  // Body parsing (with raw body capture for webhook signature verification)
   app.use(
     express.json({
       limit: "10mb",
       strict: true,
+      verify: (req: any, _res, buf) => {
+        // Store raw body for webhook signature verification (WHOOP, etc.)
+        req.rawBody = buf;
+      },
     })
   );
   app.use(
@@ -140,7 +173,7 @@ export function createApp(): Application {
   // Root endpoint
   app.get("/", (_req: Request, res: Response) => {
     res.json({
-      name: "YHealth API Server",
+      name: "Balencia API Server",
       version: "1.0.0",
       status: "running",
       environment: env.nodeEnv,

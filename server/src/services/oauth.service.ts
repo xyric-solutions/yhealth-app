@@ -64,7 +64,6 @@ class OAuthService {
     if (googleClientId) {
       try {
         // Dynamically import google-auth-library if available
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const googleAuth = await (Function('return import("google-auth-library")')() as Promise<{ OAuth2Client: new (clientId: string) => OAuth2ClientInterface }>);
         this.googleClient = new googleAuth.OAuth2Client(googleClientId);
         logger.info('Google OAuth client initialized');

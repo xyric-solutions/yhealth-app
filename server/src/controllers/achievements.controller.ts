@@ -4,6 +4,9 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { query } from '../database/pg.js';
+import { getPublicProfile } from '../utils/user.helpers.js';
+import { dynamicAchievementsService } from '../services/dynamic-achievements.service.js';
+import { microWinsService } from '../services/micro-wins.service.js';
 
 // Achievement definitions - these define all possible achievements
 interface AchievementDef {
@@ -659,8 +662,8 @@ const getAchievements = asyncHandler(async (req: AuthenticatedRequest, res: Resp
   // Get user stats
   const stats = await getUserStats(userId);
 
-  // Calculate achievement status for each definition
-  let achievements = achievementDefinitions.map((def) => {
+  // Calculate achievement status for each static definition
+  const staticAchievements = achievementDefinitions.map((def) => {
     const result = def.checkFn(stats);
     return {
       id: def.id,
@@ -675,8 +678,33 @@ const getAchievements = asyncHandler(async (req: AuthenticatedRequest, res: Resp
       maxProgress: def.maxProgress,
       progressPercentage: Math.round((result.progress / def.maxProgress) * 100),
       unlockedAt: result.unlockedAt,
+      aiGenerated: false,
+      emotionalContext: undefined as string | undefined,
+      type: undefined as string | undefined,
     };
   });
+
+  // Merge dynamic achievements
+  const dynamicAchs = await dynamicAchievementsService.getDynamicAchievements(userId);
+  const dynamicMapped = dynamicAchs.map((da) => ({
+    id: da.id,
+    title: da.title,
+    description: da.description,
+    icon: da.icon,
+    category: da.category,
+    rarity: da.rarity,
+    xpReward: da.xpReward,
+    unlocked: da.unlocked,
+    progress: da.currentProgress,
+    maxProgress: da.maxProgress,
+    progressPercentage: da.maxProgress > 0 ? Math.round((da.currentProgress / da.maxProgress) * 100) : 0,
+    unlockedAt: da.unlockedAt ? new Date(da.unlockedAt) : undefined,
+    aiGenerated: true,
+    emotionalContext: da.emotionalContext ?? undefined,
+    type: da.type,
+  }));
+
+  let achievements = [...staticAchievements, ...dynamicMapped];
 
   // Apply filters
   if (category && category !== 'all') {
@@ -690,61 +718,47 @@ const getAchievements = asyncHandler(async (req: AuthenticatedRequest, res: Resp
   }
 
   // Sort achievements: unlocked first, then by progress percentage (desc), then by rarity
-  const rarityOrder = { legendary: 0, epic: 1, rare: 2, common: 3 };
+  const rarityOrder: Record<string, number> = { legendary: 0, epic: 1, rare: 2, common: 3 };
   achievements.sort((a, b) => {
-    // Unlocked achievements first
-    if (a.unlocked !== b.unlocked) {
-      return a.unlocked ? -1 : 1;
-    }
-    // For locked achievements, sort by progress percentage (nearly complete first)
+    if (a.unlocked !== b.unlocked) return a.unlocked ? -1 : 1;
     if (!a.unlocked && !b.unlocked) {
-      if (a.progressPercentage !== b.progressPercentage) {
-        return b.progressPercentage - a.progressPercentage;
-      }
+      if (a.progressPercentage !== b.progressPercentage) return b.progressPercentage - a.progressPercentage;
     }
-    // Then by rarity
-    return rarityOrder[a.rarity] - rarityOrder[b.rarity];
+    return (rarityOrder[a.rarity] ?? 3) - (rarityOrder[b.rarity] ?? 3);
   });
 
-  // Calculate summary stats (use original achievements array before filtering)
-  const allAchievements = achievementDefinitions.map((def) => {
-    const result = def.checkFn(stats);
-    return { ...def, unlocked: result.unlocked };
-  });
-  const totalAchievements = achievementDefinitions.length;
-  const unlockedCount = allAchievements.filter((a) => a.unlocked).length;
-  const totalXP = allAchievements.filter((a) => a.unlocked).reduce((sum, a) => sum + a.xpReward, 0);
+  // Calculate summary stats from ALL achievements (static + dynamic, unfiltered)
+  const allCombined = [...staticAchievements, ...dynamicMapped];
+  const totalAchievements = allCombined.length;
+  const unlockedCount = allCombined.filter((a) => a.unlocked).length;
+  const totalXP = allCombined.filter((a) => a.unlocked).reduce((sum, a) => sum + a.xpReward, 0);
 
-  // Category breakdown (use allAchievements for accurate counts)
-  const categoryBreakdown = {
-    streak: {
-      total: allAchievements.filter((a) => a.category === 'streak').length,
-      unlocked: allAchievements.filter((a) => a.category === 'streak' && a.unlocked).length,
-    },
-    milestone: {
-      total: allAchievements.filter((a) => a.category === 'milestone').length,
-      unlocked: allAchievements.filter((a) => a.category === 'milestone' && a.unlocked).length,
-    },
-    special: {
-      total: allAchievements.filter((a) => a.category === 'special').length,
-      unlocked: allAchievements.filter((a) => a.category === 'special' && a.unlocked).length,
-    },
-    challenge: {
-      total: allAchievements.filter((a) => a.category === 'challenge').length,
-      unlocked: allAchievements.filter((a) => a.category === 'challenge' && a.unlocked).length,
-    },
-    pillar: {
-      total: allAchievements.filter((a) => a.category === 'pillar').length,
-      unlocked: allAchievements.filter((a) => a.category === 'pillar' && a.unlocked).length,
-    },
-  };
+  // Sync XP to users table (fire-and-forget)
+  const computedLevel = Math.floor(totalXP / 500) + 1;
+  query(
+    'UPDATE users SET total_xp = $1, current_level = $2 WHERE id = $3 AND (total_xp IS DISTINCT FROM $1 OR current_level IS DISTINCT FROM $2)',
+    [totalXP, computedLevel, userId]
+  ).catch(() => {});
 
-  // Rarity breakdown (use allAchievements for accurate counts)
+  // Category breakdown (from all combined)
+  const categories = ['streak', 'milestone', 'special', 'challenge', 'pillar', 'comeback', 'micro-win'];
+  const categoryBreakdown: Record<string, { total: number; unlocked: number }> = {};
+  for (const cat of categories) {
+    const catAchs = allCombined.filter((a) => a.category === cat);
+    if (catAchs.length > 0) {
+      categoryBreakdown[cat] = {
+        total: catAchs.length,
+        unlocked: catAchs.filter((a) => a.unlocked).length,
+      };
+    }
+  }
+
+  // Rarity breakdown
   const rarityBreakdown = {
-    common: allAchievements.filter((a) => a.rarity === 'common' && a.unlocked).length,
-    rare: allAchievements.filter((a) => a.rarity === 'rare' && a.unlocked).length,
-    epic: allAchievements.filter((a) => a.rarity === 'epic' && a.unlocked).length,
-    legendary: allAchievements.filter((a) => a.rarity === 'legendary' && a.unlocked).length,
+    common: allCombined.filter((a) => a.rarity === 'common' && a.unlocked).length,
+    rare: allCombined.filter((a) => a.rarity === 'rare' && a.unlocked).length,
+    epic: allCombined.filter((a) => a.rarity === 'epic' && a.unlocked).length,
+    legendary: allCombined.filter((a) => a.rarity === 'legendary' && a.unlocked).length,
   };
 
   ApiResponse.success(
@@ -754,7 +768,7 @@ const getAchievements = asyncHandler(async (req: AuthenticatedRequest, res: Resp
       summary: {
         totalAchievements,
         unlockedCount,
-        unlockedPercentage: Math.round((unlockedCount / totalAchievements) * 100),
+        unlockedPercentage: totalAchievements > 0 ? Math.round((unlockedCount / totalAchievements) * 100) : 0,
         totalXP,
         categoryBreakdown,
         rarityBreakdown,
@@ -809,6 +823,12 @@ const getAchievementSummary = asyncHandler(async (req: AuthenticatedRequest, res
   const xpProgress = totalXP - xpForCurrentLevel;
   const xpNeeded = xpForNextLevel - xpForCurrentLevel;
 
+  // Sync computed XP back to users table so gamification widget shows correct values
+  query(
+    'UPDATE users SET total_xp = $1, current_level = $2 WHERE id = $3 AND (total_xp IS DISTINCT FROM $1 OR current_level IS DISTINCT FROM $2)',
+    [totalXP, level, userId]
+  ).catch(() => {}); // fire-and-forget
+
   ApiResponse.success(
     res,
     {
@@ -825,6 +845,83 @@ const getAchievementSummary = asyncHandler(async (req: AuthenticatedRequest, res
       longestStreak: stats.longestStreak,
     },
     'Achievement summary retrieved successfully'
+  );
+});
+
+// Get user achievements (for viewing another user's profile)
+const getUserAchievements = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const currentUserId = req.user?.userId;
+  if (!currentUserId) throw ApiError.unauthorized();
+
+  const targetUserId = req.params.userId;
+  if (!targetUserId) {
+    throw ApiError.badRequest('userId parameter is required');
+  }
+
+  // Privacy check: Verify users are in a chat together
+  const chatCheck = await query<{ chat_id: string }>(
+    `SELECT DISTINCT c.id as chat_id
+     FROM chats c
+     INNER JOIN chat_participants cp1 ON c.id = cp1.chat_id
+     INNER JOIN chat_participants cp2 ON c.id = cp2.chat_id
+     WHERE cp1.user_id = $1
+     AND cp2.user_id = $2
+     AND cp1.left_at IS NULL
+     AND cp2.left_at IS NULL
+     LIMIT 1`,
+    [currentUserId, targetUserId]
+  );
+
+  if (chatCheck.rows.length === 0) {
+    throw ApiError.forbidden('You can only view achievements of users you chat with');
+  }
+
+  // Get target user's stats
+  const stats = await getUserStats(targetUserId);
+
+  // Calculate achievements for target user
+  const achievements = achievementDefinitions.map((def) => {
+    const result = def.checkFn(stats);
+    return {
+      id: def.id,
+      title: def.title,
+      description: def.description,
+      icon: def.icon,
+      category: def.category,
+      rarity: def.rarity,
+      xpReward: def.xpReward,
+      unlocked: result.unlocked,
+      progress: result.progress,
+      maxProgress: def.maxProgress,
+      progressPercentage: Math.round((result.progress / def.maxProgress) * 100),
+    };
+  });
+
+  const unlockedAchievements = achievements.filter((a) => a.unlocked);
+
+  // Calculate level based on XP
+  const totalXP = unlockedAchievements.reduce((sum, a) => sum + a.xpReward, 0);
+  const level = Math.floor(totalXP / 500) + 1;
+  const xpForCurrentLevel = (level - 1) * 500;
+  const xpForNextLevel = level * 500;
+  const xpProgress = totalXP - xpForCurrentLevel;
+  const xpNeeded = xpForNextLevel - xpForCurrentLevel;
+
+  ApiResponse.success(
+    res,
+    {
+      level,
+      totalXP,
+      xpProgress,
+      xpNeeded,
+      xpProgressPercentage: Math.round((xpProgress / xpNeeded) * 100),
+      totalUnlocked: unlockedAchievements.length,
+      totalAchievements: achievements.length,
+      unlockedAchievements: unlockedAchievements.slice(0, 6), // Return top 6 unlocked achievements
+      currentStreak: stats.currentStreak,
+      longestStreak: stats.longestStreak,
+    },
+    'User achievements retrieved successfully'
   );
 });
 
@@ -858,7 +955,32 @@ const getLeaderboard = asyncHandler(async (req: AuthenticatedRequest, res: Respo
           rank: 1,
           userId,
           name: `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || 'Anonymous',
-          avatar: user?.avatar,
+          avatar: user?.avatar ? (() => {
+            // Use helper to ensure avatar URL doesn't expire
+            const profile = getPublicProfile({
+              id: userId,
+              email: '',
+              password: null,
+              firstName: user?.first_name || '',
+              lastName: user?.last_name || '',
+              dateOfBirth: null,
+              gender: null,
+              phone: null,
+              role: 'user',
+              isActive: true,
+              avatar: user?.avatar || null,
+              isEmailVerified: false,
+              authProvider: 'email',
+              providerId: null,
+              onboardingStatus: 'completed',
+              onboardingCompletedAt: null,
+              lastLogin: null,
+              refreshToken: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+            return profile.avatarUrl;
+          })() : null,
           achievementsUnlocked: unlockedCount,
           totalXP,
           isCurrentUser: true,
@@ -906,9 +1028,81 @@ const checkNewAchievements = asyncHandler(async (req: AuthenticatedRequest, res:
   );
 });
 
+// Get recent micro-wins for the user
+const getMicroWins = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw ApiError.unauthorized();
+
+  const limit = parseInt(req.query.limit as string) || 20;
+  const wins = await microWinsService.getRecentMicroWins(userId, limit);
+
+  ApiResponse.success(res, { microWins: wins }, 'Micro-wins retrieved successfully');
+});
+
+// Generate achievements from a goal
+const generateGoalAchievements = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw ApiError.unauthorized();
+
+  const { goalId } = req.body;
+  if (!goalId) throw ApiError.badRequest('goalId is required');
+
+  // Fetch the goal
+  const goalResult = await query<{
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    target_value: string;
+    target_unit: string;
+    frequency: string;
+    status: string;
+  }>(
+    `SELECT id, title, description, category, target_value, target_unit, frequency, status
+     FROM user_goals WHERE id = $1 AND user_id = $2`,
+    [goalId, userId]
+  );
+
+  if (goalResult.rows.length === 0) throw ApiError.notFound('Goal not found');
+
+  const goal = goalResult.rows[0];
+  const achievements = await dynamicAchievementsService.generateGoalAchievements(userId, {
+    id: goal.id,
+    title: goal.title,
+    description: goal.description,
+    category: goal.category,
+    target_value: goal.target_value ? parseFloat(goal.target_value) : undefined,
+    target_unit: goal.target_unit,
+    frequency: goal.frequency,
+    status: goal.status,
+  });
+
+  ApiResponse.success(
+    res,
+    { achievements, count: achievements.length },
+    'Goal achievements generated successfully'
+  );
+});
+
+// Dismiss a micro-win
+const dismissMicroWin = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw ApiError.unauthorized();
+
+  const { microWinId } = req.params;
+  if (!microWinId) throw ApiError.badRequest('microWinId is required');
+
+  await microWinsService.dismissMicroWin(userId, microWinId);
+  ApiResponse.success(res, null, 'Micro-win dismissed');
+});
+
 export default {
   getAchievements,
   getAchievementSummary,
+  getUserAchievements,
   getLeaderboard,
   checkNewAchievements,
+  getMicroWins,
+  generateGoalAchievements,
+  dismissMicroWin,
 };

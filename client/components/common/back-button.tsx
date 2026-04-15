@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-interface BackButtonProps {
+export interface BackButtonProps {
   href?: string;
   label?: string;
   className?: string;

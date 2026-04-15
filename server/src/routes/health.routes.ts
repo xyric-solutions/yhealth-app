@@ -5,6 +5,8 @@ import {
   readinessProbe,
   detailedHealthCheck,
   serverInfo,
+  proactiveMessagingHealth,
+  resetCircuitBreaker,
 } from '../controllers/health.controller.js';
 
 const router = Router();
@@ -18,6 +20,12 @@ router.get('/ready', readinessProbe);
 
 // Detailed health check - for monitoring
 router.get('/detailed', detailedHealthCheck);
+
+// Proactive messaging diagnostics
+router.get('/proactive-messaging', proactiveMessagingHealth);
+
+// Circuit breaker manual reset (admin)
+router.post('/circuit-breaker/reset', resetCircuitBreaker);
 
 // Server info - development only
 router.get('/info', serverInfo);

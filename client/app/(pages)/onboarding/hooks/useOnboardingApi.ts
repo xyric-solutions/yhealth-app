@@ -2,14 +2,14 @@
 
 import { useState, useCallback } from "react";
 import { api, ApiError } from "@/lib/api-client";
-import {
+import type {
   GoalCategory,
   AssessmentMode,
   AssessmentResponse,
   BodyStats,
   Goal,
   Preferences,
-} from "../OnboardingContext";
+} from "@/src/types";
 
 // API Response Types
 interface AssessmentResponseData {
@@ -54,6 +54,95 @@ interface PlanData {
   activities: unknown[];
   weeklyFocuses: unknown[];
   coachMessage?: string;
+}
+
+// Comprehensive onboarding plans data
+interface OnboardingPlansData {
+  dietPlan: {
+    id: string;
+    name: string;
+    description: string;
+    goalCategory: string;
+    dailyCalories: number;
+    proteinGrams: number;
+    carbsGrams: number;
+    fatGrams: number;
+    fiberGrams: number;
+    mealsPerDay: number;
+    snacksPerDay: number;
+    mealTimes: Record<string, string>;
+    weeklyMeals: Record<string, Record<string, string>>;
+    tips: string[];
+    aiRationale: string;
+  };
+  workoutPlan: {
+    id: string;
+    name: string;
+    description: string;
+    goalCategory: string;
+    durationWeeks: number;
+    workoutsPerWeek: number;
+    workoutLocation: string;
+    fitnessLevel: string;
+    weeklySchedule: Record<string, unknown>;
+    tips: string[];
+    aiRationale: string;
+  };
+  overallAnalysis: {
+    healthScore: number;
+    riskFactors: string[];
+    recommendations: string[];
+    motivationalMessage: string;
+  };
+  provider: string;
+}
+
+// Input data for generating onboarding plans
+interface OnboardingDataInput {
+  selectedGoal: string;
+  customGoalText?: string;
+  confirmedGoals: Array<{
+    id: string;
+    category: string;
+    pillar: string;
+    title: string;
+    description: string;
+    targetValue?: number;
+    targetUnit?: string;
+    motivation?: string;
+    confidenceLevel?: number;
+  }>;
+  planDurationWeeks: number;
+  bodyStats: Record<string, number>;
+  assessmentResponses: Array<{
+    questionId: string;
+    questionText: string;
+    answer: string | string[] | number;
+    category?: string;
+  }>;
+  bodyImagesAnalysis?: {
+    hasImages: boolean;
+    imageTypes: string[];
+    aiAnalysis?: Record<string, object>;
+  };
+  preferences: {
+    coachingStyle?: string;
+    notificationFrequency?: string;
+    preferredWorkoutTime?: string;
+    preferredCheckInTime?: string;
+  };
+  dietPreferences: {
+    dietType: string;
+    allergies: string[];
+    excludedFoods: string[];
+    mealsPerDay: number;
+    mealTimes: Record<string, string>;
+  };
+  userProfile?: {
+    gender?: string;
+    dateOfBirth?: string;
+    age?: number;
+  };
 }
 
 export function useOnboardingApi() {
@@ -211,23 +300,33 @@ export function useOnboardingApi() {
     setError(null);
 
     try {
-      const formattedGoals = goals.map((g) => ({
-        category: g.category,
-        pillar: g.pillar,
-        isPrimary: g.isPrimary,
-        title: g.title,
-        description: g.description,
-        targetValue: g.targetValue,
-        targetUnit: g.targetUnit,
-        timeline: {
-          startDate: g.timeline.startDate.toISOString(),
-          targetDate: g.timeline.targetDate.toISOString(),
-          durationWeeks: g.timeline.durationWeeks,
-        },
-        motivation: g.motivation,
-        // Ensure confidenceLevel is always set (default to 7 if not provided)
-        confidenceLevel: g.confidenceLevel ?? 7,
-      }));
+      const formattedGoals = goals.map((g) => {
+        // Handle both Date objects and ISO strings for startDate/targetDate
+        const startDate = g.timeline.startDate instanceof Date
+          ? g.timeline.startDate.toISOString()
+          : g.timeline.startDate;
+        const targetDate = g.timeline.targetDate instanceof Date
+          ? g.timeline.targetDate.toISOString()
+          : g.timeline.targetDate;
+
+        return {
+          category: g.category,
+          pillar: g.pillar,
+          isPrimary: g.isPrimary,
+          title: g.title,
+          description: g.description,
+          targetValue: g.targetValue,
+          targetUnit: g.targetUnit,
+          timeline: {
+            startDate,
+            targetDate,
+            durationWeeks: g.timeline.durationWeeks,
+          },
+          motivation: g.motivation,
+          // Ensure confidenceLevel is always set (default to 7 if not provided)
+          confidenceLevel: g.confidenceLevel ?? 7,
+        };
+      });
 
       const response = await api.post<{
         goals: unknown[];
@@ -480,6 +579,145 @@ export function useOnboardingApi() {
     }
   }, []);
 
+  /**
+   * Generate comprehensive AI plans from onboarding data
+   * Analyzes goals, MCQs, body stats, images, and preferences
+   * Returns personalized diet plan AND workout plan
+   */
+  const generateOnboardingPlans = useCallback(async (onboardingData?: OnboardingDataInput) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.post<OnboardingPlansData>(
+        "/plans/generate-onboarding-plans",
+        { onboardingData }
+      );
+
+      if (response.success && response.data) {
+        return response.data;
+      }
+      throw new Error("Failed to generate personalized plans");
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : "Failed to generate personalized plans";
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  /**
+   * Upload body image during onboarding
+   */
+  const uploadBodyImage = useCallback(async (
+    file: File,
+    imageType: 'face' | 'front' | 'side' | 'back',
+    captureContext: string = 'onboarding'
+  ) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('imageType', imageType);
+      formData.append('captureContext', captureContext);
+
+      const response = await api.post<{
+        id: string;
+        imageType: string;
+        imageKey: string;
+        imageUrl: string;
+        captureContext: string;
+        analysisStatus: string;
+        createdAt: Date;
+      }>(
+        "/onboarding/body-images/upload",
+        formData
+      );
+
+      if (response.success && response.data) {
+        return response.data;
+      }
+      throw new Error("Failed to upload body image");
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : "Failed to upload body image";
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  /**
+   * Analyze body image with AI
+   */
+  const analyzeBodyImage = useCallback(async (imageId: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.post<{
+        imageId: string;
+        imageType: string;
+        analysis: unknown;
+        status: string;
+      }>(
+        `/onboarding/body-images/${imageId}/analyze`,
+        {}
+      );
+
+      if (response.success && response.data) {
+        return response.data;
+      }
+      throw new Error("Failed to analyze body image");
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : "Failed to analyze body image";
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  /**
+   * Batch analyze all pending body images
+   */
+  const analyzeAllBodyImages = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.post<{
+        analyzed: number;
+        failed: number;
+        total: number;
+        results: Array<{ imageId: string; status: string }>;
+      }>(
+        "/onboarding/body-images/analyze-all",
+        {}
+      );
+
+      if (response.success && response.data) {
+        return response.data;
+      }
+      throw new Error("Failed to analyze body images");
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : "Failed to analyze body images";
+      setError(message);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   return {
     isLoading,
     error,
@@ -503,6 +741,11 @@ export function useOnboardingApi() {
     completePreferencesStep,
     // Plan
     generatePlan,
+    generateOnboardingPlans,
     completeOnboarding,
+    // Body Images
+    uploadBodyImage,
+    analyzeBodyImage,
+    analyzeAllBodyImages,
   };
 }

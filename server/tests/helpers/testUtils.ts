@@ -1,15 +1,30 @@
 /**
  * Test Utilities and Helpers
+ * Uses PostgreSQL-based user creation (no Mongoose dependency)
  */
 
 import { faker } from '@faker-js/faker';
 import jwt from 'jsonwebtoken';
-import { User, type IUserDocument } from '../../src/models/user.model.js';
+import bcrypt from 'bcryptjs';
+import { query } from '../../src/database/pg.js';
 import type { IJwtPayload, UserRole } from '../../src/types/index.js';
 
 // JWT Secret for testing
 const JWT_SECRET = process.env['JWT_SECRET'] || 'test-jwt-secret';
 const JWT_REFRESH_SECRET = process.env['JWT_REFRESH_SECRET'] || 'test-jwt-refresh-secret';
+
+/**
+ * Test user shape returned from PostgreSQL
+ */
+export interface TestUser {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: UserRole;
+  is_email_verified: boolean;
+  onboarding_status: string;
+}
 
 /**
  * Generate fake user data
@@ -36,7 +51,7 @@ export function generateUserData(overrides: Partial<{
 }
 
 /**
- * Create a test user in the database
+ * Create a test user in the PostgreSQL database
  */
 export async function createTestUser(overrides: Partial<{
   email: string;
@@ -46,26 +61,52 @@ export async function createTestUser(overrides: Partial<{
   role: UserRole;
   isEmailVerified: boolean;
   onboardingStatus: string;
-}> = {}): Promise<IUserDocument> {
+}> = {}): Promise<TestUser> {
   const userData = generateUserData(overrides);
-  const user = new User({
-    ...userData,
-    isEmailVerified: overrides.isEmailVerified ?? true,
-    onboardingStatus: overrides.onboardingStatus ?? 'registered',
-  });
-  await user.save();
-  return user;
+  const hashedPassword = await bcrypt.hash(userData.password, 12);
+
+  // Map role name to role_id UUID
+  const roleMap: Record<string, string> = {
+    user: '11111111-1111-1111-1111-111111111101',
+    admin: '11111111-1111-1111-1111-111111111102',
+    moderator: '11111111-1111-1111-1111-111111111103',
+    doctor: '11111111-1111-1111-1111-111111111104',
+  };
+  const roleId = roleMap[userData.role] || roleMap['user'];
+
+  const result = await query<TestUser>(
+    `INSERT INTO users (
+      email, password, first_name, last_name,
+      auth_provider, onboarding_status, is_email_verified, is_active, role_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING id, email, first_name, last_name,
+      (SELECT slug FROM roles WHERE id = role_id) as role,
+      is_email_verified, onboarding_status`,
+    [
+      userData.email,
+      hashedPassword,
+      userData.firstName,
+      userData.lastName,
+      'local',
+      overrides.onboardingStatus ?? 'registered',
+      overrides.isEmailVerified ?? true,
+      true,
+      roleId,
+    ]
+  );
+
+  return result.rows[0];
 }
 
 /**
- * Generate JWT tokens for a user
+ * Generate JWT tokens for a test user
  */
-export function generateTestTokens(user: IUserDocument): {
+export function generateTestTokens(user: TestUser): {
   accessToken: string;
   refreshToken: string;
 } {
   const payload: Omit<IJwtPayload, 'iat' | 'exp'> = {
-    userId: user._id.toString(),
+    userId: user.id,
     email: user.email,
     role: user.role,
   };
@@ -92,7 +133,7 @@ export async function createAuthenticatedUser(overrides: Partial<{
   email: string;
   role: UserRole;
 }> = {}): Promise<{
-  user: IUserDocument;
+  user: TestUser;
   accessToken: string;
   refreshToken: string;
 }> {
@@ -223,22 +264,22 @@ export function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Generate random ObjectId string
+ * Generate random UUID string
  */
-export function generateObjectId(): string {
-  return faker.database.mongodbObjectId();
+export function generateId(): string {
+  return crypto.randomUUID();
 }
 
 /**
- * Clean up test data
+ * Clean up test data from PostgreSQL
  */
-export async function cleanupTestData(): Promise<void> {
-  const mongoose = await import('mongoose');
-  const collections = mongoose.default.connection.collections;
-  for (const key in collections) {
-    const collection = collections[key];
-    if (collection) {
-      await collection.deleteMany({});
-    }
+export async function cleanupTestData(userId?: string): Promise<void> {
+  if (userId) {
+    // Delete user-related data in reverse dependency order
+    await query(`DELETE FROM daily_user_scores WHERE user_id = $1`, [userId]);
+    await query(`DELETE FROM activity_events WHERE user_id = $1`, [userId]);
+    await query(`DELETE FROM health_data_records WHERE user_id = $1`, [userId]);
+    await query(`DELETE FROM user_integrations WHERE user_id = $1`, [userId]);
+    await query(`DELETE FROM users WHERE id = $1`, [userId]);
   }
 }

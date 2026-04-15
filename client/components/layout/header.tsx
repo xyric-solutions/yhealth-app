@@ -7,7 +7,7 @@ import {
   Menu,
   X,
   Sparkles,
-  ArrowRight,
+
   User,
   Settings,
   LogOut,
@@ -15,28 +15,31 @@ import {
   ChevronDown,
   Rocket,
   Target,
-  Bell,
+  Calendar,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
+
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Logo } from "@/components/common/logo";
 import { useAuth } from "@/app/context/AuthContext";
+import { StatusIndicator } from "@/app/components/activity/StatusIndicator";
+import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
   { href: "#features", label: "Features" },
   { href: "#how-it-works", label: "How it Works" },
   { href: "#testimonials", label: "Testimonials" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#faq", label: "FAQ" },
+  { href: "/plans", label: "Pricing" },
+  { href: "/faq", label: "FAQ" },
 ];
 
 export function Header() {
@@ -47,12 +50,39 @@ export function Header() {
     logout,
     getInitials,
     getDisplayName,
+    hasRole,
   } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
   const lastScrollY = useRef(0);
-  const scrollThreshold = 100; // Start hiding after 10% scroll (approx 100px)
+  const scrollThreshold = 100;
+
+  // Track active section via IntersectionObserver
+  useEffect(() => {
+    const sectionIds = navLinks
+      .filter((l) => l.href.startsWith("#"))
+      .map((l) => l.href.slice(1));
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+          }
+        }
+      },
+      { rootMargin: "-30% 0px -60% 0px", threshold: 0 }
+    );
+
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -115,24 +145,39 @@ export function Header() {
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center gap-1">
-            {navLinks.map((link, index) => (
-              <motion.div
-                key={link.href}
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 + index * 0.05 }}
-              >
-                <Link
-                  href={link.href}
-                  className="relative px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+            {navLinks.map((link, index) => {
+              const isActive = link.href.startsWith("#") && activeSection === link.href.slice(1);
+              return (
+                <motion.div
+                  key={link.href}
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 + index * 0.05 }}
                 >
-                  {link.label}
-                  {/* Hover effect */}
-                  <span className="absolute inset-0 rounded-full bg-primary/0 group-hover:bg-primary/10 transition-colors" />
-                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-gradient-to-r from-primary to-purple-500 transition-all group-hover:w-1/2 rounded-full" />
-                </Link>
-              </motion.div>
-            ))}
+                  <Link
+                    href={link.href}
+                    className={cn(
+                      "relative px-4 py-2 text-sm font-medium transition-colors group",
+                      isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {link.label}
+                    {/* Hover effect */}
+                    <span className="absolute inset-0 rounded-full bg-primary/0 group-hover:bg-primary/10 transition-colors" />
+                    {/* Active gradient underline */}
+                    {isActive ? (
+                      <motion.span
+                        layoutId="activeNavIndicator"
+                        className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-0.5 bg-gradient-to-r from-primary to-purple-500 rounded-full"
+                        transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                      />
+                    ) : (
+                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-gradient-to-r from-primary to-purple-500 transition-all group-hover:w-1/2 rounded-full" />
+                    )}
+                  </Link>
+                </motion.div>
+              );
+            })}
           </div>
 
           {/* Right Side Actions */}
@@ -142,17 +187,13 @@ export function Header() {
                 <div className="w-24 h-10 glass rounded-full animate-pulse" />
               ) : isAuthenticated && user ? (
                 <>
-                  {/* Notification Bell */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    asChild
-                    className="relative rounded-full hover:bg-primary/10 transition-colors"
-                  >
-                    <Link href="/notifications">
-                      <Bell className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
-                    </Link>
-                  </Button>
+                  {/* Activity Status Indicator */}
+                  <div className="flex items-center">
+                    <StatusIndicator />
+                  </div>
+
+                  {/* Notification Bell with Dropdown */}
+                  <NotificationDropdown />
 
                   <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -164,7 +205,7 @@ export function Header() {
                         <div className="relative">
                           <Avatar className="h-9 w-9 ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all">
                             <AvatarImage
-                              src={user.avatarUrl || undefined}
+                              src={user.avatarUrl || '/avatar.jpg'}
                               alt={getDisplayName()}
                             />
                             <AvatarFallback className="bg-gradient-to-br from-primary to-purple-500 text-white font-semibold text-sm">
@@ -190,7 +231,7 @@ export function Header() {
                         <div className="flex items-center gap-3">
                           <Avatar className="h-12 w-12 ring-2 ring-primary/30 shadow-lg">
                             <AvatarImage
-                              src={user.avatarUrl || undefined}
+                              src={user.avatarUrl || '/avatar.jpg'}
                               alt={getDisplayName()}
                             />
                             <AvatarFallback className="bg-gradient-to-br from-primary to-purple-500 text-white font-bold text-base">
@@ -239,7 +280,7 @@ export function Header() {
                         </Link>
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem
+                      {/* <DropdownMenuItem
                         asChild
                         className="cursor-pointer rounded-xl px-3 py-2.5 focus:bg-emerald-500/10 hover:bg-emerald-500/10 transition-colors group"
                       >
@@ -257,7 +298,7 @@ export function Header() {
                             </p>
                           </div>
                         </Link>
-                      </DropdownMenuItem>
+                      </DropdownMenuItem> */}
 
                       <DropdownMenuItem
                         asChild
@@ -279,7 +320,7 @@ export function Header() {
                         </Link>
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem
+                      {/* <DropdownMenuItem
                         asChild
                         className="cursor-pointer rounded-xl px-3 py-2.5 focus:bg-cyan-500/10 hover:bg-cyan-500/10 transition-colors group"
                       >
@@ -291,6 +332,23 @@ export function Header() {
                             <p className="text-sm font-medium">My Goals</p>
                             <p className="text-[10px] text-muted-foreground">
                               Track your progress
+                            </p>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem> */}
+
+                      <DropdownMenuItem
+                        asChild
+                        className="cursor-pointer rounded-xl px-3 py-2.5 focus:bg-blue-500/10 hover:bg-blue-500/10 transition-colors group"
+                      >
+                        <Link href="/activity-status" className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                            <Calendar className="w-4 h-4 text-blue-500" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">Activity Status</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              Track daily status
                             </p>
                           </div>
                         </Link>
@@ -315,6 +373,32 @@ export function Header() {
                           </div>
                         </Link>
                       </DropdownMenuItem>
+
+                      {/* Admin Dashboard Link - Only for admins */}
+                      {hasRole("admin") && (
+                        <>
+                          <DropdownMenuSeparator className="bg-white/5 m-0" />
+                          <DropdownMenuItem
+                            asChild
+                            className="cursor-pointer rounded-xl px-3 py-2.5 focus:bg-purple-500/10 hover:bg-purple-500/10 transition-colors group"
+                          >
+                            <Link
+                              href="/admin"
+                              className="flex items-center gap-3"
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
+                                <Shield className="w-4 h-4 text-purple-500" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium">Admin Dashboard</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  Manage system
+                                </p>
+                              </div>
+                            </Link>
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </div>
 
                     <DropdownMenuSeparator className="bg-white/5 m-0" />
@@ -402,22 +486,30 @@ export function Header() {
           >
             <div className="container mx-auto px-4 py-6">
               <div className="flex flex-col gap-2">
-                {navLinks.map((link, index) => (
-                  <motion.div
-                    key={link.href}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <Link
-                      href={link.href}
-                      className="block py-3 px-4 text-lg font-medium text-muted-foreground hover:text-foreground hover:bg-primary/10 rounded-xl transition-all"
-                      onClick={() => setIsMobileMenuOpen(false)}
+                {navLinks.map((link, index) => {
+                  const isActive = link.href.startsWith("#") && activeSection === link.href.slice(1);
+                  return (
+                    <motion.div
+                      key={link.href}
+                      initial={{ opacity: 0, x: -30 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.05 + index * 0.07, type: "spring", stiffness: 300, damping: 25 }}
                     >
-                      {link.label}
-                    </Link>
-                  </motion.div>
-                ))}
+                      <Link
+                        href={link.href}
+                        className={cn(
+                          "block py-3 px-4 text-lg font-medium rounded-xl transition-all",
+                          isActive
+                            ? "text-foreground bg-primary/10 border-l-2 border-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-primary/10"
+                        )}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        {link.label}
+                      </Link>
+                    </motion.div>
+                  );
+                })}
 
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -431,7 +523,7 @@ export function Header() {
                       <div className="flex items-center gap-3 p-3 glass rounded-xl border border-white/10">
                         <Avatar className="h-12 w-12 ring-2 ring-primary/20">
                           <AvatarImage
-                            src={user.avatarUrl || undefined}
+                            src={user.avatarUrl || '/avatar.jpg'}
                             alt={getDisplayName()}
                           />
                           <AvatarFallback className="bg-gradient-to-br from-primary to-purple-500 text-white font-semibold">

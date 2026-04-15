@@ -16,14 +16,14 @@ export function emailVerificationTemplate(data: VerificationEmailData): string {
 
   const content = `
     <p style="margin: 0 0 20px 0;">
-      Thank you for joining <strong>yHealth</strong> - your personal AI Life Coach! We're excited to help you achieve your health and life goals.
+      Thank you for joining <strong>Balencia</strong> - your personal AI Life Coach! We're excited to help you achieve your health and life goals.
     </p>
 
     <p style="margin: 0 0 20px 0;">
       To get started on your wellness journey, please verify your email address by clicking the button below:
     </p>
 
-    ${alertBox('info', `This verification link will expire in <strong>${expiresIn}</strong>. If you didn't create an account with yHealth, you can safely ignore this email.`)}
+    ${alertBox('info', `This verification link will expire in <strong>${expiresIn}</strong>. If you didn't create an account with Balencia, you can safely ignore this email.`)}
   `;
 
   const secondaryContent = `
@@ -36,8 +36,8 @@ export function emailVerificationTemplate(data: VerificationEmailData): string {
   `;
 
   return baseEmailLayout({
-    preheader: `Verify your email to start your wellness journey with yHealth - ${firstName}, we're excited to have you!`,
-    title: 'Verify Your Email - yHealth',
+    preheader: `Verify your email to start your wellness journey with Balencia - ${firstName}, we're excited to have you!`,
+    title: 'Verify Your Email - Balencia',
     greeting: `Welcome, ${firstName}! `,
     content,
     ctaButton: {
@@ -46,7 +46,7 @@ export function emailVerificationTemplate(data: VerificationEmailData): string {
     },
     secondaryContent,
     footer: {
-      text: "Questions? Reply to this email or contact us at support@yhealth.app - we're here to help!",
+      text: "Questions? Reply to this email or contact us at support@balencia.app - we're here to help!",
       showSocial: true,
       showUnsubscribe: false, // Don't show unsubscribe for transactional emails
     },
@@ -61,7 +61,7 @@ export function resendVerificationTemplate(data: VerificationEmailData): string 
 
   const content = `
     <p style="margin: 0 0 20px 0;">
-      You requested a new verification link for your yHealth account. No worries - here's a fresh one!
+      You requested a new verification link for your Balencia account. No worries - here's a fresh one!
     </p>
 
     <p style="margin: 0 0 20px 0;">
@@ -79,13 +79,13 @@ export function resendVerificationTemplate(data: VerificationEmailData): string 
       ${verificationUrl}
     </p>
     <p style="margin: 16px 0 0 0; font-size: 13px;">
-      If you didn't request this, please <a href="mailto:security@yhealth.app" style="color: ${BRAND_COLORS.primary};">contact our security team</a>.
+      If you didn't request this, please <a href="mailto:security@balencia.app" style="color: ${BRAND_COLORS.primary};">contact our security team</a>.
     </p>
   `;
 
   return baseEmailLayout({
-    preheader: `New verification link for your yHealth account - ${firstName}, verify to continue`,
-    title: 'New Verification Link - yHealth',
+    preheader: `New verification link for your Balencia account - ${firstName}, verify to continue`,
+    title: 'New Verification Link - Balencia',
     greeting: `Hi ${firstName},`,
     content,
     ctaButton: {
@@ -112,7 +112,7 @@ export function emailVerifiedTemplate(firstName: string, dashboardUrl: string): 
     </div>
 
     <p style="margin: 0 0 20px 0; text-align: center; font-size: 18px;">
-      Your email has been successfully verified! You're all set to start your journey with yHealth.
+      Your email has been successfully verified! You're all set to start your journey with Balencia.
     </p>
 
     <p style="margin: 0 0 20px 0;">
@@ -154,8 +154,8 @@ export function emailVerifiedTemplate(firstName: string, dashboardUrl: string): 
   `;
 
   return baseEmailLayout({
-    preheader: `Email verified! Welcome to yHealth - Your AI Life Coach awaits, ${firstName}`,
-    title: 'Email Verified - yHealth',
+    preheader: `Email verified! Welcome to Balencia - Your AI Life Coach awaits, ${firstName}`,
+    title: 'Email Verified - Balencia',
     greeting: `You're verified, ${firstName}!`,
     content,
     ctaButton: {

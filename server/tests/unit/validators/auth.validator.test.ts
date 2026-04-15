@@ -6,9 +6,9 @@ import {
   registerSchema,
   loginSchema,
   socialAuthSchema,
-  recordConsentSchema,
-  whatsAppEnrollSchema,
-  verifyWhatsAppSchema,
+  consentSchema,
+  whatsAppEnrollmentSchema,
+  whatsAppVerificationSchema,
   refreshTokenSchema,
 } from '../../../src/validators/auth.validator.js';
 
@@ -139,22 +139,19 @@ describe('Auth Validators', () => {
     it('should validate Google auth data', () => {
       const result = socialAuthSchema.safeParse({
         provider: 'google',
+        email: 'user@gmail.com',
         idToken: 'some-google-id-token',
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate Apple auth data with user data', () => {
+    it('should validate Apple auth data', () => {
       const result = socialAuthSchema.safeParse({
         provider: 'apple',
+        email: 'user@icloud.com',
         idToken: 'some-apple-id-token',
-        userData: {
-          email: 'user@icloud.com',
-          name: {
-            firstName: 'John',
-            lastName: 'Doe',
-          },
-        },
+        firstName: 'John',
+        lastName: 'Doe',
       });
       expect(result.success).toBe(true);
     });
@@ -162,88 +159,100 @@ describe('Auth Validators', () => {
     it('should reject invalid provider', () => {
       const result = socialAuthSchema.safeParse({
         provider: 'facebook',
+        email: 'user@example.com',
         idToken: 'some-token',
       });
       expect(result.success).toBe(false);
     });
 
-    it('should reject missing idToken', () => {
+    it('should reject missing email', () => {
       const result = socialAuthSchema.safeParse({
         provider: 'google',
+        idToken: 'some-token',
       });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('recordConsentSchema', () => {
-    it('should validate consent data', () => {
-      const result = recordConsentSchema.safeParse({
-        consents: [
-          { type: 'terms_of_service', version: '1.0', accepted: true },
-          { type: 'privacy_policy', version: '1.0', accepted: true },
-        ],
+  describe('consentSchema', () => {
+    it('should validate consent data with required fields', () => {
+      const result = consentSchema.safeParse({
+        termsOfService: true,
+        privacyPolicy: true,
       });
       expect(result.success).toBe(true);
     });
 
-    it('should reject invalid consent type', () => {
-      const result = recordConsentSchema.safeParse({
-        consents: [
-          { type: 'invalid_type', version: '1.0', accepted: true },
-        ],
+    it('should reject when termsOfService is false', () => {
+      const result = consentSchema.safeParse({
+        termsOfService: false,
+        privacyPolicy: true,
       });
       expect(result.success).toBe(false);
     });
 
-    it('should validate all consent types', () => {
-      const consentTypes = [
-        'terms_of_service',
-        'privacy_policy',
-        'email_marketing',
-        'whatsapp_coaching',
-      ];
+    it('should reject when privacyPolicy is false', () => {
+      const result = consentSchema.safeParse({
+        termsOfService: true,
+        privacyPolicy: false,
+      });
+      expect(result.success).toBe(false);
+    });
 
-      for (const type of consentTypes) {
-        const result = recordConsentSchema.safeParse({
-          consents: [{ type, version: '1.0', accepted: true }],
-        });
-        expect(result.success).toBe(true);
+    it('should accept optional marketing consents', () => {
+      const result = consentSchema.safeParse({
+        termsOfService: true,
+        privacyPolicy: true,
+        emailMarketing: true,
+        whatsAppCoaching: false,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should default optional consents to false', () => {
+      const result = consentSchema.safeParse({
+        termsOfService: true,
+        privacyPolicy: true,
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.emailMarketing).toBe(false);
+        expect(result.data.whatsAppCoaching).toBe(false);
       }
     });
-
-    it('should require version string', () => {
-      const result = recordConsentSchema.safeParse({
-        consents: [
-          { type: 'terms_of_service', accepted: true },
-        ],
-      });
-      expect(result.success).toBe(false);
-    });
   });
 
-  describe('whatsAppEnrollSchema', () => {
+  describe('whatsAppEnrollmentSchema', () => {
     it('should validate WhatsApp enrollment data', () => {
-      const result = whatsAppEnrollSchema.safeParse({
-        phoneNumber: '1234567890',
+      const result = whatsAppEnrollmentSchema.safeParse({
+        phoneNumber: '+1234567890',
         countryCode: '+1',
       });
       expect(result.success).toBe(true);
     });
 
-    it('should reject invalid phone number', () => {
-      const result = whatsAppEnrollSchema.safeParse({
-        phoneNumber: '123',
+    it('should reject phone number starting with 0', () => {
+      const result = whatsAppEnrollmentSchema.safeParse({
+        phoneNumber: '01234567890',
         countryCode: '+1',
       });
       expect(result.success).toBe(false);
     });
 
-    it('should accept country codes with + prefix', () => {
+    it('should accept phone numbers with + prefix', () => {
+      const result = whatsAppEnrollmentSchema.safeParse({
+        phoneNumber: '+14155552671',
+        countryCode: '+1',
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept valid country codes', () => {
       const validCodes = ['+1', '+44', '+91', '+86'];
 
       for (const countryCode of validCodes) {
-        const result = whatsAppEnrollSchema.safeParse({
-          phoneNumber: '1234567890',
+        const result = whatsAppEnrollmentSchema.safeParse({
+          phoneNumber: '+1234567890',
           countryCode,
         });
         expect(result.success).toBe(true);
@@ -251,30 +260,31 @@ describe('Auth Validators', () => {
     });
   });
 
-  describe('verifyWhatsAppSchema', () => {
+  describe('whatsAppVerificationSchema', () => {
     it('should validate verification data', () => {
-      const result = verifyWhatsAppSchema.safeParse({
-        phoneNumber: '1234567890',
-        countryCode: '+1',
+      const result = whatsAppVerificationSchema.safeParse({
         code: '123456',
       });
       expect(result.success).toBe(true);
     });
 
-    it('should reject invalid code format', () => {
-      const result = verifyWhatsAppSchema.safeParse({
-        phoneNumber: '1234567890',
-        countryCode: '+1',
+    it('should reject invalid code format (too short)', () => {
+      const result = whatsAppVerificationSchema.safeParse({
         code: '12345', // Too short
       });
       expect(result.success).toBe(false);
     });
 
     it('should reject non-numeric code', () => {
-      const result = verifyWhatsAppSchema.safeParse({
-        phoneNumber: '1234567890',
-        countryCode: '+1',
+      const result = whatsAppVerificationSchema.safeParse({
         code: 'abcdef',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject code that is too long', () => {
+      const result = whatsAppVerificationSchema.safeParse({
+        code: '1234567',
       });
       expect(result.success).toBe(false);
     });

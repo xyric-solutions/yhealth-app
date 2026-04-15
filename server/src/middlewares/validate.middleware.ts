@@ -33,7 +33,12 @@ export function validate(
       }
 
       // Replace request data with parsed/transformed data
-      req[target] = result.data;
+      // req.query is a getter in newer Express versions, so use defineProperty
+      if (target === 'query') {
+        Object.defineProperty(req, 'query', { value: result.data, writable: true, configurable: true });
+      } else {
+        req[target] = result.data;
+      }
       next();
     } catch (error) {
       next(error);
@@ -61,7 +66,11 @@ export function validateRequest(schemas: {
         const errors = formatZodErrors(result.error, target);
         allErrors.push(...errors);
       } else {
-        req[target as ValidationTarget] = result.data;
+        if (target === 'query') {
+          Object.defineProperty(req, 'query', { value: result.data, writable: true, configurable: true });
+        } else {
+          req[target as ValidationTarget] = result.data;
+        }
       }
     }
 

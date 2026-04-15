@@ -1,6 +1,5 @@
 import multer from 'multer';
-import type { Request, RequestHandler } from 'express';
-import { ApiError } from '../utils/ApiError.js';
+import type { Request, RequestHandler, Response } from 'express';
 import { MAX_FILE_SIZE, type FileType } from '../services/r2.service.js';
 
 // Extended request type with file
@@ -74,22 +73,40 @@ export const uploadFiles = createMultiUploadMiddleware('file', 'files', 10);
 export const handleUploadError = (
   error: Error,
   _req: Request,
-  _res: Response,
+  res: Response,
   next: (err?: Error) => void
-) => {
+): void => {
   if (error instanceof multer.MulterError) {
     switch (error.code) {
       case 'LIMIT_FILE_SIZE':
-        next(new ApiError(400, 'File too large. Maximum size: 20MB'));
-        break;
+        const maxSizeMB = MAX_FILE_SIZE / (1024 * 1024);
+        res.status(400).json({
+          success: false,
+          message: `File too large. Maximum size: ${maxSizeMB}MB`,
+          code: 'FILE_TOO_LARGE',
+        });
+        return;
       case 'LIMIT_FILE_COUNT':
-        next(new ApiError(400, 'Too many files'));
-        break;
+        res.status(400).json({
+          success: false,
+          message: 'Too many files',
+          code: 'TOO_MANY_FILES',
+        });
+        return;
       case 'LIMIT_UNEXPECTED_FILE':
-        next(new ApiError(400, `Unexpected field: ${error.field}`));
-        break;
+        res.status(400).json({
+          success: false,
+          message: `Unexpected field: ${error.field}`,
+          code: 'UNEXPECTED_FIELD',
+        });
+        return;
       default:
-        next(new ApiError(400, error.message));
+        res.status(400).json({
+          success: false,
+          message: error.message,
+          code: 'UPLOAD_ERROR',
+        });
+        return;
     }
   } else {
     next(error);

@@ -247,10 +247,9 @@ StaggerItem.displayName = "StaggerItem";
 interface ParallaxProps {
   children: ReactNode;
   className?: string;
-  speed?: number;
 }
 
-export function Parallax({ children, className, speed = 0.5 }: ParallaxProps) {
+export function Parallax({ children, className }: ParallaxProps) {
   return (
     <motion.div
       className={className}

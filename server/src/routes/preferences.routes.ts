@@ -102,6 +102,16 @@ router.patch(
 );
 
 // ============================================
+// Product Tour Status
+// ============================================
+
+// Update product tour completion status
+router.patch(
+  '/tour-status',
+  preferencesController.updateTourStatus
+);
+
+// ============================================
 // Onboarding & Management
 // ============================================
 

@@ -143,4 +143,49 @@ export function createRateLimiter(options: {
   return rateLimit(baseOptions);
 }
 
+/**
+ * AI generation limiter — expensive LLM operations (5 per hour per user)
+ */
+export const aiGenerationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { success: false, message: 'AI generation limit reached. Please wait before generating again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userKeyGenerator,
+  validate: false,
+  handler: handleRateLimitExceeded,
+  skip: () => env.isTest,
+});
+
+/**
+ * Messaging limiter — chat/coaching messages (120 per hour per user)
+ */
+export const messagingLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 120,
+  message: { success: false, message: 'Message limit reached. Please wait before sending more.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userKeyGenerator,
+  validate: false,
+  handler: handleRateLimitExceeded,
+  skip: () => env.isTest,
+});
+
+/**
+ * Data export limiter — CSV/JSON exports (10 per hour per user)
+ */
+export const exportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: 'Export limit reached. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userKeyGenerator,
+  validate: false,
+  handler: handleRateLimitExceeded,
+  skip: () => env.isTest,
+});
+
 export default globalLimiter;

@@ -1,51 +1,107 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { motion, useInView, AnimatePresence, useScroll, useTransform } from "framer-motion";
-import { Plus, Minus, HelpCircle, MessageCircle, Sparkles } from "lucide-react";
+import { useState, useRef, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Plus,
+  HelpCircle,
+  MessageCircle,
+  Sparkles,
+  Search,
+  X,
+  Shield,
+  Zap,
+  ChevronRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useGSAP } from "@/hooks/use-gsap";
+import { gsap } from "@/lib/gsap-init";
+import { AnimatedGradientMesh, GSAPScrollReveal } from "./shared";
+
+// ─── Data ────────────────────────────────────────────────────────────
 
 const faqs = [
   {
-    question: "How does the AI-powered health tracking work?",
-    answer:
-      "Our AI analyzes your daily activities, sleep patterns, nutrition, and other health metrics to provide personalized insights and recommendations. It learns from your habits over time to offer increasingly accurate and helpful suggestions tailored specifically to your health goals.",
-    category: "AI & Technology",
-  },
-  {
     question: "Is my health data secure?",
     answer:
-      "Absolutely. We take data security very seriously. All your health data is encrypted both in transit and at rest. We're HIPAA compliant and never share your personal health information with third parties. You have complete control over your data and can export or delete it at any time.",
+      "Your data is protected by AES-256 encryption at rest and TLS 1.3 in transit. We maintain full HIPAA compliance with regular third-party audits. Your data is never sold or shared — you retain complete ownership and can export or delete it at any time.",
     category: "Security",
+    icon: Shield,
   },
   {
-    question: "Can I connect my fitness devices and wearables?",
+    question: "Does it replace a doctor?",
     answer:
-      "Yes! YHealth integrates seamlessly with popular fitness devices and wearables including Apple Watch, Fitbit, Garmin, Samsung Galaxy Watch, and many more. You can also connect to apps like Apple Health, Google Fit, and Strava for comprehensive tracking.",
+      "No. Balencia is a wellness companion that complements professional medical care. Our AI provides personalized fitness, nutrition, and wellbeing guidance — but does not diagnose, treat, or prescribe. Always consult your healthcare provider for medical decisions.",
+    category: "Trust",
+    icon: HelpCircle,
+  },
+  {
+    question: "Which wearables are supported?",
+    answer:
+      "We integrate with Apple Watch, Whoop, Garmin, Fitbit, Samsung Galaxy Watch, and Huawei Health. We also sync with Apple Health, Google Health Connect, and Strava — consolidating all metrics into one dashboard. New integrations are added regularly.",
     category: "Integrations",
+    icon: Zap,
   },
   {
-    question: "What's included in the free plan?",
+    question: "How accurate is AI coaching?",
     answer:
-      "The free plan includes basic activity tracking, daily step counter, water intake logging, 7-day history, and access to our community. It's a great way to get started and experience the core features of YHealth before upgrading.",
+      "Our AI is built on evidence-based fitness, nutrition, and behavioral science research. It analyzes your biometric data, activity patterns, and sleep quality to deliver recommendations that improve over time. The system cross-references wearable data with progress trends to adjust plans dynamically.",
+    category: "AI & Technology",
+    icon: Sparkles,
+  },
+  {
+    question: "What is your refund policy?",
+    answer:
+      "Cancel within the first 30 days for a full refund, no questions asked. After that, you keep access through the end of your billing period. No hidden fees, no penalties — reactivate anytime.",
     category: "Pricing",
+    icon: Shield,
   },
   {
-    question: "How do personalized meal plans work?",
+    question: "How does AI-powered health tracking work?",
     answer:
-      "Based on your health goals, dietary preferences, allergies, and lifestyle, our AI creates customized meal plans. You'll get daily meal suggestions, recipes with nutritional information, and shopping lists. The plans adapt based on your feedback and progress.",
-    category: "Features",
+      "Balencia aggregates data from wearables, manual inputs, and in-app activity across Fitness, Nutrition, and Wellbeing. Our AI processes this in real time — analyzing sleep, HRV, workouts, nutrition, and stress to generate your daily Wellness Score and surface proactive insights.",
+    category: "AI & Technology",
+    icon: Sparkles,
   },
   {
-    question: "Can I cancel my subscription anytime?",
+    question: "Can I talk to my AI coach or call them?",
     answer:
-      "Yes, you can cancel your subscription at any time with no questions asked. If you cancel within the first 30 days, you'll receive a full refund. After cancellation, you'll retain access to premium features until the end of your billing period.",
-    category: "Pricing",
+      "Yes — use text chat for quick check-ins, voice commands during workouts, or the Call Coach feature for in-depth conversations. Your coach also sends proactive nudges like hydration reminders and recovery suggestions.",
+    category: "AI & Technology",
+    icon: MessageCircle,
+  },
+  {
+    question: "Is there a community or way to compete?",
+    answer:
+      "Compete on global and friends-only leaderboards, join weekly challenges, and earn achievement badges. Prefer privacy? Keep your profile private and focus on personal goals. The community is designed to keep you engaged on your terms.",
+    category: "Trust",
+    icon: HelpCircle,
   },
 ];
 
-// FAQ Item Component
+const categories = [
+  "All",
+  ...Array.from(new Set(faqs.map((f) => f.category))),
+];
+
+const categoryGradients: Record<string, string> = {
+  Security: "from-emerald-400 to-teal-500",
+  Trust: "from-blue-400 to-indigo-500",
+  Integrations: "from-orange-400 to-amber-500",
+  "AI & Technology": "from-purple-400 to-violet-500",
+  Pricing: "from-pink-400 to-rose-500",
+};
+
+const categoryGlows: Record<string, string> = {
+  Security: "rgba(52, 211, 153, 0.2)",
+  Trust: "rgba(96, 165, 250, 0.2)",
+  Integrations: "rgba(251, 146, 60, 0.2)",
+  "AI & Technology": "rgba(167, 139, 250, 0.2)",
+  Pricing: "rgba(244, 114, 182, 0.2)",
+};
+
+// ─── FAQ Item Component ─────────────────────────────────────────────
 function FAQItem({
   faq,
   index,
@@ -57,53 +113,81 @@ function FAQItem({
   isOpen: boolean;
   onToggle: () => void;
 }) {
+  const gradient =
+    categoryGradients[faq.category] || "from-primary to-purple-500";
+  const glowColor = categoryGlows[faq.category] || "rgba(139, 92, 246, 0.2)";
+  const Icon = faq.icon;
+
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-50px" }}
-      transition={{ delay: index * 0.08, duration: 0.4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10, transition: { duration: 0.2 } }}
+      transition={{ delay: index * 0.04, duration: 0.3 }}
       className="group"
     >
       <div
         className={cn(
-          "relative overflow-hidden rounded-2xl border transition-all duration-300",
+          "relative overflow-hidden rounded-2xl border transition-all duration-500",
           isOpen
-            ? "bg-gradient-to-br from-primary/5 via-background to-purple-500/5 border-primary/20 shadow-lg shadow-primary/5"
-            : "bg-background/50 border-white/10 hover:border-white/20 hover:bg-background/80"
+            ? "border-white/15 bg-white/[0.03] shadow-lg"
+            : "border-white/[0.12] bg-white/[0.07] hover:border-white/15 hover:bg-white/[0.09]"
         )}
+        style={
+          isOpen
+            ? {
+                boxShadow: `0 0 40px -10px ${glowColor}, 0 0 0 1px rgba(255,255,255,0.08)`,
+              }
+            : undefined
+        }
       >
-        {/* Glow effect when open */}
+        {/* Gradient top border */}
+        <div
+          className={cn(
+            "absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r transition-opacity duration-500",
+            gradient,
+            isOpen ? "opacity-80" : "opacity-0 group-hover:opacity-40"
+          )}
+        />
+
+        {/* Corner glow when open */}
         {isOpen && (
-          <div className="absolute -top-20 -right-20 w-40 h-40 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+          <div
+            className="absolute -top-16 -right-16 w-40 h-40 rounded-full blur-[60px] pointer-events-none"
+            style={{
+              background: `radial-gradient(circle, ${glowColor}, transparent 70%)`,
+            }}
+          />
         )}
 
         <button
           onClick={onToggle}
-          className="w-full text-left p-6  flex items-start gap-4 relative z-10"
+          className="w-full text-left p-5 sm:p-6 flex items-center gap-4 relative z-10"
         >
-          {/* Number indicator */}
+          {/* Icon */}
           <div
             className={cn(
-              "flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold transition-all duration-300",
+              "flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300",
               isOpen
-                ? "bg-gradient-to-br from-primary to-purple-500 text-white shadow-lg shadow-primary/30"
-                : "bg-muted/50 text-muted-foreground group-hover:bg-muted"
+                ? `bg-gradient-to-br ${gradient} shadow-lg`
+                : "bg-white/[0.06] group-hover:bg-white/[0.1]"
             )}
           >
-            {String(index + 1).padStart(2, "0")}
+            <Icon
+              className={cn(
+                "w-4.5 h-4.5 transition-colors duration-300",
+                isOpen ? "text-white" : "text-muted-foreground/90"
+              )}
+              strokeWidth={2}
+            />
           </div>
 
           {/* Question */}
-          <div className="flex-1 min-w-0 pt-1.5">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-medium text-primary/70 uppercase tracking-wider">
-                {faq.category}
-              </span>
-            </div>
+          <div className="flex-1 min-w-0">
             <h3
               className={cn(
-                "text-base sm:text-lg font-semibold transition-colors",
+                "text-[15px] sm:text-base font-semibold transition-colors duration-300 leading-snug",
                 isOpen ? "text-foreground" : "text-foreground/80"
               )}
             >
@@ -111,20 +195,30 @@ function FAQItem({
             </h3>
           </div>
 
-          {/* Toggle icon */}
-          <div
-            className={cn(
-              "flex-shrink-0 w-8 h-8 rounded-lg cursor-pointer flex items-center justify-center transition-all duration-300",
-              isOpen
-                ? "bg-primary/10 text-primary rotate-0"
-                : "bg-muted/50 text-muted-foreground group-hover:bg-muted"
-            )}
-          >
-            {isOpen ? (
-              <Minus className="w-4 h-4" />
-            ) : (
-              <Plus className="w-4 h-4" />
-            )}
+          {/* Category badge + Toggle */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <span
+              className={cn(
+                "hidden sm:inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-all duration-300",
+                isOpen
+                  ? `bg-gradient-to-r ${gradient} text-white`
+                  : "bg-white/[0.07] text-muted-foreground/80"
+              )}
+            >
+              {faq.category}
+            </span>
+            <motion.div
+              animate={{ rotate: isOpen ? 45 : 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className={cn(
+                "flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300",
+                isOpen
+                  ? "bg-white/10 text-foreground"
+                  : "bg-white/[0.07] text-muted-foreground/80 group-hover:bg-white/[0.1] group-hover:text-muted-foreground"
+              )}
+            >
+              <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+            </motion.div>
           </div>
         </button>
 
@@ -135,12 +229,16 @@ function FAQItem({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
+              transition={{
+                height: { type: "spring", stiffness: 300, damping: 30 },
+                opacity: { duration: 0.25 },
+              }}
               className="overflow-hidden"
             >
-              <div className="px-6 pb-6 pt-0">
+              <div className="px-5 sm:px-6 pb-5 sm:pb-6 pt-0">
                 <div className="pl-14">
-                  <p className="text-muted-foreground leading-relaxed">
+                  <div className="h-px bg-gradient-to-r from-white/10 via-white/5 to-transparent mb-4" />
+                  <p className="text-sm text-muted-foreground/90 leading-[1.7]">
                     {faq.answer}
                   </p>
                 </div>
@@ -153,141 +251,254 @@ function FAQItem({
   );
 }
 
+// ─── FAQ SECTION ────────────────────────────────────────────────────
 export function FAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
   const sectionRef = useRef<HTMLElement>(null);
-  const isInView = useInView(sectionRef, { once: true, margin: "-100px" });
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Scroll-based zoom animation
-  const { scrollYProgress } = useScroll({
-    target: sectionRef,
-    offset: ["start end", "end start"],
-  });
+  // GSAP scroll-based entrance
+  useGSAP(
+    () => {
+      if (!containerRef.current) return;
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0.3, y: 50 },
+        {
+          opacity: 1,
+          y: 0,
+          ease: "none",
+          scrollTrigger: {
+            trigger: sectionRef.current,
+            start: "top 92%",
+            end: "top 45%",
+            scrub: 1,
+          },
+        }
+      );
+    },
+    sectionRef,
+    []
+  );
 
-  const scale = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0.9, 1, 1, 0.95]);
-  const opacity = useTransform(scrollYProgress, [0, 0.2, 0.8, 1], [0.4, 1, 1, 0.4]);
-  const y = useTransform(scrollYProgress, [0, 0.5, 1], [40, 0, -40]);
+  // Filter FAQs
+  const filteredFaqs = useMemo(() => {
+    return faqs.filter((faq) => {
+      const matchesCategory =
+        activeCategory === "All" || faq.category === activeCategory;
+      const matchesSearch =
+        searchQuery === "" ||
+        faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        faq.answer.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [activeCategory, searchQuery]);
 
-  // Parallax for background glows
-  const glowY1 = useTransform(scrollYProgress, [0, 1], [-40, 60]);
-  const glowY2 = useTransform(scrollYProgress, [0, 1], [40, -60]);
+  const handleCategoryChange = (category: string) => {
+    setActiveCategory(category);
+    setOpenIndex(null);
+  };
 
   return (
     <section
       id="faq"
       ref={sectionRef}
-      className="py-20 md:py-28 relative overflow-hidden"
+      className="relative py-24 md:py-32 lg:py-40 overflow-hidden"
     >
       {/* Background */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-b from-background via-muted/30 to-background" />
-        <div
-          className="absolute inset-0 opacity-[0.02]"
-          style={{
-            backgroundImage: `linear-gradient(hsl(var(--primary) / 0.3) 1px, transparent 1px),
-                             linear-gradient(90deg, hsl(var(--primary) / 0.3) 1px, transparent 1px)`,
-            backgroundSize: "40px 40px",
-          }}
-        />
-        {/* Decorative glows with parallax */}
-        <motion.div
-          style={{ y: glowY1 }}
-          className="absolute top-1/4 left-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl"
-        />
-        <motion.div
-          style={{ y: glowY2 }}
-          className="absolute bottom-1/4 right-0 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl"
-        />
+        <AnimatedGradientMesh intensity={0.12} blur={110} />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/[0.03] to-transparent" />
+        <div className="absolute top-1/4 left-[5%] w-80 h-80 bg-purple-500/[0.04] rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/3 right-[10%] w-72 h-72 bg-primary/[0.04] rounded-full blur-[100px]" />
       </div>
 
-      <motion.div
-        style={{ scale, opacity, y }}
-        className="container mx-auto px-4 relative z-10"
-      >
+      <div ref={containerRef} className="container mx-auto px-4 sm:px-6">
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 glass-card px-4 py-2 rounded-full text-sm font-medium mb-6"
-          >
-            <HelpCircle className="w-4 h-4 text-primary" />
-            <span>Got Questions?</span>
-          </motion.div>
+        <GSAPScrollReveal
+          direction="up"
+          distance={30}
+          duration={0.7}
+          className="text-center max-w-4xl mx-auto mb-12 md:mb-16"
+        >
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-xs sm:text-sm font-medium text-primary mb-6">
+            <HelpCircle className="w-3.5 h-3.5" />
+            Frequently Asked
+          </div>
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-5 tracking-tight leading-[1.1]">
+            Everything you need{" "}
+            <span className="bg-gradient-to-r from-primary via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              to know.
+            </span>
+          </h2>
+          <p className="text-base sm:text-lg text-muted-foreground/80 max-w-2xl mx-auto leading-relaxed">
+            Transparent answers about security, AI coaching, integrations, and
+            pricing. Can&apos;t find what you need? Our team responds within
+            hours.
+          </p>
+        </GSAPScrollReveal>
 
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6"
-          >
-            Frequently Asked{" "}
-            <span className="gradient-text-animated">Questions</span>
-          </motion.h2>
+        {/* Search + Filters */}
+        <GSAPScrollReveal
+          direction="up"
+          distance={20}
+          duration={0.5}
+          delay={0.1}
+          className="max-w-3xl mx-auto mb-10 space-y-4"
+        >
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/80" />
+            <input
+              type="text"
+              placeholder="Search questions..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setOpenIndex(null);
+              }}
+              className="w-full pl-11 pr-10 py-3 rounded-xl bg-white/[0.07] border border-white/[0.12] text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/30 focus:ring-1 focus:ring-primary/15 transition-all backdrop-blur-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-white/[0.06] flex items-center justify-center hover:bg-white/[0.1] transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-lg text-muted-foreground"
-          >
-            Everything you need to know about YHealth. Can&apos;t find your
-            answer?
-            <br className="hidden sm:block" />
-            Our support team is here to help.
-          </motion.p>
-        </div>
-
-        {/* FAQ Grid */}
-        <div className="max-w-3xl mx-auto">
-          <div className="space-y-4">
-            {faqs.map((faq, index) => (
-              <FAQItem
-                key={index}
-                faq={faq}
-                index={index}
-                isOpen={openIndex === index}
-                onToggle={() =>
-                  setOpenIndex(openIndex === index ? null : index)
-                }
-              />
+          {/* Category chips */}
+          <div className="flex flex-wrap gap-2">
+            {categories.map((category) => (
+              <motion.button
+                key={category}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleCategoryChange(category)}
+                className={cn(
+                  "px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-300 border",
+                  activeCategory === category
+                    ? "bg-primary/15 border-primary/30 text-primary shadow-sm shadow-primary/10"
+                    : "bg-white/[0.07] border-white/[0.12] text-muted-foreground/80 hover:border-white/15 hover:text-foreground/80"
+                )}
+              >
+                {category}
+                {category !== "All" && (
+                  <span className="ml-1.5 text-[10px] opacity-50">
+                    {faqs.filter((f) => f.category === category).length}
+                  </span>
+                )}
+              </motion.button>
             ))}
+          </div>
+        </GSAPScrollReveal>
+
+        {/* FAQ List */}
+        <div className="max-w-3xl mx-auto">
+          <div className="space-y-3">
+            <AnimatePresence mode="popLayout">
+              {filteredFaqs.length > 0 ? (
+                filteredFaqs.map((faq, index) => (
+                  <FAQItem
+                    key={faq.question}
+                    faq={faq}
+                    index={index}
+                    isOpen={openIndex === index}
+                    onToggle={() =>
+                      setOpenIndex(openIndex === index ? null : index)
+                    }
+                  />
+                ))
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-center py-16"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-white/[0.07] border border-white/[0.12] flex items-center justify-center mx-auto mb-4">
+                    <Search className="w-6 h-6 text-muted-foreground/60" />
+                  </div>
+                  <p className="text-muted-foreground/80 text-sm mb-2">
+                    No questions match your search.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSearchQuery("");
+                      setActiveCategory("All");
+                    }}
+                    className="text-primary text-xs font-medium hover:underline inline-flex items-center gap-1"
+                  >
+                    Clear filters
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
         {/* Contact CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6, delay: 0.5 }}
-          className="mt-16 max-w-2xl mx-auto"
+        <GSAPScrollReveal
+          direction="up"
+          distance={20}
+          duration={0.6}
+          delay={0.15}
+          className="mt-16 md:mt-20 max-w-2xl mx-auto"
         >
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary/5 via-background to-purple-500/5 p-8 text-center">
-            {/* Decorative elements */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl" />
-            <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl" />
+          <motion.div
+            className="relative overflow-hidden rounded-3xl border border-white/[0.12] bg-white/[0.07] backdrop-blur-sm p-8 sm:p-10 text-center"
+            whileHover={{
+              boxShadow:
+                "0 0 60px -12px rgba(139, 92, 246, 0.2), 0 0 0 1px rgba(255,255,255,0.1)",
+            }}
+          >
+            {/* Gradient top border */}
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary via-purple-400 to-pink-400 opacity-50" />
+
+            {/* Corner glows */}
+            <div className="absolute -top-20 -right-20 w-48 h-48 bg-primary/[0.06] rounded-full blur-[80px]" />
+            <div className="absolute -bottom-20 -left-20 w-48 h-48 bg-purple-500/[0.06] rounded-full blur-[80px]" />
 
             <div className="relative z-10">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/30">
-                <MessageCircle className="w-7 h-7 text-white" />
+              <div className="relative w-14 h-14 mx-auto mb-5">
+                <motion.div
+                  className="absolute inset-0 rounded-2xl bg-primary/20 blur-xl"
+                  animate={{
+                    scale: [1, 1.3, 1],
+                    opacity: [0.4, 0.15, 0.4],
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                />
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center shadow-lg shadow-primary/30">
+                  <MessageCircle className="w-6 h-6 text-white" />
+                </div>
               </div>
-              <h3 className="text-xl font-bold mb-2">Still have questions?</h3>
-              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                Our friendly support team is available 24/7 to help you with
-                anything you need.
+              <h3 className="text-xl sm:text-2xl font-bold mb-2 text-foreground/95">
+                Still have questions?
+              </h3>
+              <p className="text-sm text-muted-foreground/90 mb-6 max-w-md mx-auto leading-relaxed">
+                Our support team responds within hours and is available around
+                the clock to assist you.
               </p>
               <Button
                 size="lg"
-                className="bg-gradient-to-r from-primary to-purple-500 hover:from-primary/90 hover:to-purple-500/90 rounded-full px-8"
+                className="bg-gradient-to-r from-primary to-purple-500 hover:from-primary/90 hover:to-purple-500/90 rounded-full px-8 shadow-lg shadow-primary/20"
               >
                 <Sparkles className="w-4 h-4 mr-2" />
                 Contact Support
               </Button>
             </div>
-          </div>
-        </motion.div>
-      </motion.div>
+          </motion.div>
+        </GSAPScrollReveal>
+      </div>
     </section>
   );
 }

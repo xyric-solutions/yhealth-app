@@ -6,6 +6,10 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { logger } from '../services/logger.service.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 import { notificationService } from '../services/notification.service.js';
+import { goalDecompositionService } from '../services/goal-decomposition.service.js';
+import { autoProgressService } from '../services/auto-progress.service.js';
+import { embeddingQueueService } from '../services/embedding-queue.service.js';
+import { JobPriorities } from '../config/queue.config.js';
 import type {
   GoalDiscoveryInput,
   AssessmentModeInput,
@@ -606,6 +610,15 @@ export const createGoal = asyncHandler(async (req: AuthenticatedRequest, res: Re
 
   logger.info('Goal created', { userId, goalId: goal.id, category: data.category });
 
+  // Enqueue embedding for goal (async, non-blocking)
+  await embeddingQueueService.enqueueEmbedding({
+    userId,
+    sourceType: 'user_goal',
+    sourceId: goal.id,
+    operation: 'create',
+    priority: JobPriorities.CRITICAL,
+  });
+
   // Send notification for goal creation
   await notificationService.goalCreated(
     userId,
@@ -613,6 +626,24 @@ export const createGoal = asyncHandler(async (req: AuthenticatedRequest, res: Re
     data.title,
     data.isPrimary || existingGoalsCount === 0
   );
+
+  // Auto-generate achievements for this goal (fire-and-forget)
+  import('../services/dynamic-achievements.service.js').then(({ dynamicAchievementsService }) => {
+    dynamicAchievementsService.generateGoalAchievements(userId, {
+      id: goal.id,
+      title: data.title,
+      description: data.description,
+      category: data.category,
+      target_value: data.targetValue,
+      target_unit: data.targetUnit,
+      status: 'active',
+    }).catch((err: unknown) => {
+      logger.error('Failed to generate goal achievements', {
+        goalId: goal.id,
+        error: err instanceof Error ? err.message : 'Unknown',
+      });
+    });
+  }).catch(() => {});
 
   ApiResponse.created(res, {
     goal: mapGoalRow(goal),
@@ -629,6 +660,13 @@ export const acceptSuggestedGoals = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.userId;
     if (!userId) throw ApiError.unauthorized();
+
+    // Verify user exists before attempting to create goals
+    const userCheck = await query<{ id: string }>('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userCheck.rows.length === 0) {
+      logger.error('[Assessment] User not found when accepting goals', { userId });
+      throw ApiError.unauthorized('Your session has expired. Please sign out, re-run database setup (npm run db:setup), and sign in again.');
+    }
 
     const data = req.body as AcceptSuggestedGoalsInput;
 
@@ -681,12 +719,13 @@ export const acceptSuggestedGoals = asyncHandler(
           ]
         );
 
-        createdGoals.push(result.rows[0]);
+        const goal = result.rows[0];
+        createdGoals.push(goal);
       }
 
       await client.query(
         'UPDATE users SET onboarding_status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        ['integrations_pending', userId]
+        ['preferences_pending', userId]
       );
 
       return createdGoals;
@@ -694,20 +733,32 @@ export const acceptSuggestedGoals = asyncHandler(
 
     logger.info('Suggested goals accepted', { userId, goalCount: result.length });
 
-    // Send notifications for each goal created
-    for (const goal of result) {
-      await notificationService.goalCreated(
-        userId,
-        goal.id,
-        goal.title,
-        goal.is_primary
-      );
-    }
-
+    // Send response immediately — don't block on side-effects
     ApiResponse.created(res, {
       goals: result.map(mapGoalRow),
       nextStep: 'integrations',
     }, 'Goals created successfully');
+
+    // Fire-and-forget: enqueue embeddings and notifications after response
+    for (const goal of result) {
+      embeddingQueueService.enqueueEmbedding({
+        userId,
+        sourceType: 'user_goal',
+        sourceId: goal.id,
+        operation: 'create',
+        priority: JobPriorities.CRITICAL,
+      }).catch((err) => {
+        logger.warn('[Assessment] Embedding enqueue failed (non-blocking)', {
+          goalId: goal.id, error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
+      notificationService.goalCreated(userId, goal.id, goal.title, goal.is_primary).catch((err) => {
+        logger.warn('[Assessment] Goal notification failed (non-blocking)', {
+          goalId: goal.id, error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
   }
 );
 
@@ -890,6 +941,15 @@ export const updateGoal = asyncHandler(async (req: AuthenticatedRequest, res: Re
 
   logger.info('Goal updated', { userId, goalId });
 
+  // Enqueue embedding update for goal (async, non-blocking)
+  await embeddingQueueService.enqueueEmbedding({
+    userId,
+    sourceType: 'user_goal',
+    sourceId: goalId,
+    operation: 'update',
+    priority: JobPriorities.CRITICAL,
+  });
+
   // Send progress notification if currentValue was updated
   if (data.currentValue !== undefined) {
     const previousProgress = goal.progress || 0;
@@ -902,8 +962,16 @@ export const updateGoal = asyncHandler(async (req: AuthenticatedRequest, res: Re
       previousProgress
     );
 
-    // Check if goal is completed
-    if (newProgress >= 100 && previousProgress < 100) {
+    // Auto-complete goal when progress reaches 100%
+    if (newProgress >= 100 && previousProgress < 100 && updatedGoal.status !== 'completed') {
+      await query(
+        'UPDATE user_goals SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        ['completed', goalId]
+      );
+      updatedGoal.status = 'completed';
+      logger.info('Goal auto-completed (progress 100%)', { userId, goalId });
+      await notificationService.goalCompleted(userId, goalId, updatedGoal.title);
+    } else if (newProgress >= 100 && previousProgress < 100) {
       await notificationService.goalCompleted(userId, goalId, updatedGoal.title);
     }
   }
@@ -929,6 +997,15 @@ export const deleteGoal = asyncHandler(async (req: AuthenticatedRequest, res: Re
   );
 
   if (goalResult.rows.length === 0) throw ApiError.notFound('Goal not found');
+
+  // Enqueue embedding deletion BEFORE actual delete (to preserve ID)
+  await embeddingQueueService.enqueueEmbedding({
+    userId,
+    sourceType: 'user_goal',
+    sourceId: goalId,
+    operation: 'delete',
+    priority: JobPriorities.MEDIUM,
+  });
 
   await query('DELETE FROM user_goals WHERE id = $1 AND user_id = $2', [goalId, userId]);
 
@@ -962,6 +1039,19 @@ export const deleteGoals = asyncHandler(async (req: AuthenticatedRequest, res: R
   }
 
   const validIds = goalsResult.rows.map(r => r.id);
+
+  // Enqueue embedding deletions BEFORE actual delete (to preserve IDs)
+  await Promise.all(
+    validIds.map((goalId) =>
+      embeddingQueueService.enqueueEmbedding({
+        userId,
+        sourceType: 'user_goal',
+        sourceId: goalId,
+        operation: 'delete',
+        priority: JobPriorities.MEDIUM,
+      })
+    )
+  );
 
   // Delete the goals
   const deleteResult = await query(
@@ -1236,6 +1326,47 @@ function runSafetyChecks(goal: { category: GoalCategory; targetValue: number; du
   return { warnings, requiresDoctorConsult };
 }
 
+// ============================================
+// GOAL ACTIONS & AUTO-PROGRESS
+// ============================================
+
+export const getGoalActions = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw ApiError.unauthorized();
+
+  const { goalId } = req.params;
+  let actions = await goalDecompositionService.getActionsWithDailyStatus(userId, goalId);
+
+  if (actions.length === 0) {
+    await goalDecompositionService.getOrCreateActionsForUserGoal(userId, goalId);
+    actions = await goalDecompositionService.getActionsWithDailyStatus(userId, goalId);
+    ApiResponse.success(res, { actions, generated: true });
+    return;
+  }
+
+  ApiResponse.success(res, { actions, generated: false });
+});
+
+export const toggleGoalAction = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw ApiError.unauthorized();
+
+  const { actionId } = req.params;
+  const completed = await goalDecompositionService.toggleActionCompletion(userId, actionId);
+
+  ApiResponse.success(res, { completed });
+});
+
+export const getGoalAutoProgress = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.userId;
+  if (!userId) throw ApiError.unauthorized();
+
+  const { goalId } = req.params;
+  const progress = await autoProgressService.calculateForUserGoal(userId, goalId);
+
+  ApiResponse.success(res, { progress });
+});
+
 export default {
   selectGoal,
   selectMode,
@@ -1252,4 +1383,7 @@ export default {
   updateGoal,
   deleteGoal,
   deleteGoals,
+  getGoalActions,
+  toggleGoalAction,
+  getGoalAutoProgress,
 };

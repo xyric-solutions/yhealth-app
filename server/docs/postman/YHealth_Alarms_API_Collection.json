@@ -1,0 +1,393 @@
+{
+  "info": {
+    "_postman_id": "yhealth-alarms-api-collection",
+    "name": "YHealth - Workout Alarms API",
+    "description": "Complete API collection for testing YHealth Workout Alarms system\n\n**Base URL:** {{baseUrl}}\n\n**Authentication:** Bearer Token (JWT)\n\n**Setup:**\n1. Set `baseUrl` variable (default: http://localhost:5000/api)\n2. Set `accessToken` variable with your JWT token\n3. Set `alarmId` variable after creating an alarm (will be auto-set)\n\n**Time Format:** All alarm times must be in 24-hour format (HH:MM), e.g., 13:30 for 1:30 PM\n\n**Days of Week:** 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string",
+      "description": "JWT access token from login"
+    },
+    {
+      "key": "alarmId",
+      "value": "",
+      "type": "string",
+      "description": "Alarm ID (auto-set after creating alarm)"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Get All Alarms",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const jsonData = pm.response.json();",
+              "    if (jsonData.data && jsonData.data.alarms && jsonData.data.alarms.length > 0) {",
+              "        // Auto-set alarmId to first alarm for convenience",
+              "        pm.collectionVariables.set('alarmId', jsonData.data.alarms[0].id);",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/alarms",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms"]
+        },
+        "description": "Get all workout alarms for the authenticated user"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Alarm Summary",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/alarms/summary",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms", "summary"]
+        },
+        "description": "Get alarm schedule summary including total alarms, enabled alarms, next alarm, and today's alarms"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Today's Alarms",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/alarms/today",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms", "today"]
+        },
+        "description": "Get all alarms scheduled for today"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Alarm by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/alarms/{{alarmId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms", "{{alarmId}}"]
+        },
+        "description": "Get a specific alarm by its ID"
+      },
+      "response": []
+    },
+    {
+      "name": "Create Alarm - Morning Workout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    const jsonData = pm.response.json();",
+              "    if (jsonData.data && jsonData.data.alarm) {",
+              "        pm.collectionVariables.set('alarmId', jsonData.data.alarm.id);",
+              "        console.log('Alarm created with ID:', jsonData.data.alarm.id);",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Morning Workout\",\n  \"message\": \"Time to start your day with exercise!\",\n  \"alarmTime\": \"07:00\",\n  \"daysOfWeek\": [1, 2, 3, 4, 5],\n  \"soundEnabled\": true,\n  \"soundFile\": \"alarm.wav\",\n  \"vibrationEnabled\": true,\n  \"snoozeMinutes\": 10\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/alarms",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms"]
+        },
+        "description": "Create a morning workout alarm (Mon-Fri at 7:00 AM)\n\n**Time Format:** 24-hour format (HH:MM)\n**Days:** 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday"
+      },
+      "response": []
+    },
+    {
+      "name": "Create Alarm - Afternoon Workout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    const jsonData = pm.response.json();",
+              "    if (jsonData.data && jsonData.data.alarm) {",
+              "        pm.collectionVariables.set('alarmId', jsonData.data.alarm.id);",
+              "        console.log('Alarm created with ID:', jsonData.data.alarm.id);",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Afternoon Workout\",\n  \"message\": \"Let's get moving!\",\n  \"alarmTime\": \"13:30\",\n  \"daysOfWeek\": [0, 1, 2, 3, 4, 5, 6],\n  \"soundEnabled\": true,\n  \"soundFile\": \"azan1.mp3\",\n  \"vibrationEnabled\": true,\n  \"snoozeMinutes\": 5\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/alarms",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms"]
+        },
+        "description": "Create an afternoon workout alarm (Every day at 1:30 PM)\n\n**Time Format:** 24-hour format (HH:MM)\n**Days:** 0-6 (Sunday-Saturday) for every day"
+      },
+      "response": []
+    },
+    {
+      "name": "Create Alarm - Evening Workout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    const jsonData = pm.response.json();",
+              "    if (jsonData.data && jsonData.data.alarm) {",
+              "        pm.collectionVariables.set('alarmId', jsonData.data.alarm.id);",
+              "        console.log('Alarm created with ID:', jsonData.data.alarm.id);",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Evening Workout\",\n  \"message\": \"End your day strong!\",\n  \"alarmTime\": \"18:00\",\n  \"daysOfWeek\": [1, 3, 5],\n  \"soundEnabled\": true,\n  \"soundFile\": \"alarm.wav\",\n  \"vibrationEnabled\": false,\n  \"snoozeMinutes\": 15\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/alarms",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms"]
+        },
+        "description": "Create an evening workout alarm (Mon, Wed, Fri at 6:00 PM)\n\n**Time Format:** 24-hour format (HH:MM)\n**Days:** 1=Monday, 3=Wednesday, 5=Friday"
+      },
+      "response": []
+    },
+    {
+      "name": "Update Alarm",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Updated Workout Reminder\",\n  \"alarmTime\": \"08:00\",\n  \"daysOfWeek\": [1, 2, 3, 4, 5, 6],\n  \"soundFile\": \"azan2.mp3\",\n  \"isEnabled\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/alarms/{{alarmId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms", "{{alarmId}}"]
+        },
+        "description": "Update an existing alarm. Only include fields you want to update.\n\n**Note:** Updating `alarmTime` or `daysOfWeek` will automatically recalculate `nextTriggerAt`"
+      },
+      "response": []
+    },
+    {
+      "name": "Toggle Alarm",
+      "request": {
+        "method": "PATCH",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/alarms/{{alarmId}}/toggle",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms", "{{alarmId}}", "toggle"]
+        },
+        "description": "Toggle the enabled/disabled state of an alarm"
+      },
+      "response": []
+    },
+    {
+      "name": "Snooze Alarm",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"minutes\": 10\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/alarms/{{alarmId}}/snooze",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms", "{{alarmId}}", "snooze"]
+        },
+        "description": "Snooze an alarm for the specified number of minutes"
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Alarm",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/alarms/{{alarmId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms", "{{alarmId}}"]
+        },
+        "description": "Delete an alarm permanently"
+      },
+      "response": []
+    },
+    {
+      "name": "Recalculate All Alarms",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/alarms/recalculate",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms", "recalculate"]
+        },
+        "description": "Recalculate `nextTriggerAt` for all user's enabled alarms. Useful for fixing alarms with incorrect trigger times after timezone changes or system updates."
+      },
+      "response": []
+    },
+    {
+      "name": "Test Trigger Alarm",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/alarms/{{alarmId}}/test-trigger",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms", "{{alarmId}}", "test-trigger"]
+        },
+        "description": "Manually trigger the reminder processor job to check if the alarm should fire. This is useful for testing alarm triggering logic.\n\n**Note:** The alarm will only trigger if `nextTriggerAt` is within the trigger window (10 minutes past to 5 minutes future)"
+      },
+      "response": []
+    },
+    {
+      "name": "Create Alarm - Test Current Time",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Calculate time 2 minutes from now for testing",
+              "const now = new Date();",
+              "now.setMinutes(now.getMinutes() + 2);",
+              "const hours = String(now.getHours()).padStart(2, '0');",
+              "const minutes = String(now.getMinutes()).padStart(2, '0');",
+              "const alarmTime = hours + ':' + minutes;",
+              "pm.variables.set('testAlarmTime', alarmTime);",
+              "console.log('Test alarm time set to:', alarmTime);"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    const jsonData = pm.response.json();",
+              "    if (jsonData.data && jsonData.data.alarm) {",
+              "        pm.collectionVariables.set('alarmId', jsonData.data.alarm.id);",
+              "        console.log('Test alarm created with ID:', jsonData.data.alarm.id);",
+              "        console.log('Alarm will trigger at:', jsonData.data.alarm.nextTriggerAt);",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Test Alarm - Trigger Soon\",\n  \"message\": \"This alarm should trigger in 2 minutes for testing\",\n  \"alarmTime\": \"{{testAlarmTime}}\",\n  \"daysOfWeek\": [0, 1, 2, 3, 4, 5, 6],\n  \"soundEnabled\": true,\n  \"soundFile\": \"alarm.wav\",\n  \"vibrationEnabled\": true,\n  \"snoozeMinutes\": 5\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/alarms",
+          "host": ["{{baseUrl}}"],
+          "path": ["alarms"]
+        },
+        "description": "Create a test alarm that will trigger in 2 minutes. Useful for testing the alarm triggering system.\n\n**Note:** The alarm time is automatically calculated to be 2 minutes from the current time."
+      },
+      "response": []
+    }
+  ]
+}
+

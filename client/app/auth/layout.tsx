@@ -246,7 +246,7 @@ export default function AuthLayout({
                 { value: "50K+", label: "Active Users" },
                 { value: "4.9", label: "App Rating" },
                 { value: "98%", label: "Satisfaction" },
-              ].map((stat, index) => (
+              ].map((stat, _index) => (
                 <div key={stat.label} className="text-center">
                   <div className="text-2xl font-bold gradient-text">{stat.value}</div>
                   <div className="text-xs text-muted-foreground">{stat.label}</div>
@@ -318,7 +318,7 @@ export default function AuthLayout({
           </motion.div>
 
           <div className="text-sm text-muted-foreground text-center">
-            &copy; {new Date().getFullYear()} YHealth. All rights reserved.
+            &copy; {new Date().getFullYear()} Balencia. All rights reserved.
           </div>
         </div>
       </motion.div>

@@ -52,6 +52,7 @@ interface AuthContextValue extends AuthState {
   getDisplayName: () => string;
   isOnboardingComplete: () => boolean;
   hasRole: (role: string) => boolean;
+  isAdmin: () => boolean;
 }
 
 // Create context
@@ -59,6 +60,9 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 // Protected routes that require authentication
 const PROTECTED_ROUTES = ["/dashboard", "/onboarding", "/settings", "/profile"];
+
+// Admin routes that require admin role
+const ADMIN_ROUTES = ["/admin"];
 
 // Routes that should redirect to dashboard if authenticated
 const AUTH_ROUTES = ["/auth/signin", "/auth/signup"];
@@ -71,6 +75,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  
+  // Memoize router to prevent dependency array changes
+  const routerRef = useRef(router);
+  routerRef.current = router;
 
   // Store only user data from API - session data is derived
   const [fetchedUser, setFetchedUser] = useState<User | null>(null);
@@ -78,6 +86,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Initialize API client from cookie on mount (for page refreshes)
   useEffect(() => {
     api.initFromCookie();
+    
+    // Set up token expiration handler - automatically logout on 401
+    api.setOnTokenExpired(async () => {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[AuthContext] Token expired, logging out user");
+      }
+      
+      // Clear token
+      api.setAccessToken(null);
+      
+      // Sign out from NextAuth with error handling
+      try {
+        await signOut({ 
+          redirect: true,
+          callbackUrl: "/auth/signin?expired=true"
+        });
+      } catch (error) {
+        // Handle JSON parsing errors or other signOut issues
+        console.error("[AuthContext] Error during signOut:", error);
+        // Fallback: redirect manually if signOut fails
+        if (typeof window !== "undefined") {
+          window.location.href = "/auth/signin?expired=true";
+        }
+      }
+    });
+    
+    // Cleanup: remove callback on unmount
+    return () => {
+      api.setOnTokenExpired(null);
+    };
   }, []);
 
   // Derive auth state from session (no setState needed)
@@ -91,9 +129,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log("[AuthContext] Session state:", {
         status,
         hasSession: !!session,
+        sessionUser: session?.user ? { id: session.user.id, email: session.user.email } : null,
         accessToken: session?.accessToken
           ? `${session.accessToken.substring(0, 20)}...`
           : null,
+        refreshToken: session?.refreshToken ? "present" : null,
+        onboardingStatus: session?.onboardingStatus,
       });
     }
 
@@ -139,6 +180,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     // Use fetched user if available, otherwise create from session
+    // IMPORTANT: If fetchedUser is null, we should wait for it to load before determining role
+    // For now, use session role if available, otherwise default to "user"
     const user: User = fetchedUser || {
       id: session.user.id,
       email: session.user.email || "",
@@ -148,7 +191,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       dateOfBirth: null,
       gender: null,
       phone: null,
-      role: "user",
+      // Use role from session if available, otherwise default to "user"
+      // Note: This is a fallback - the real role should come from fetchedUser
+      // The role is now included in NextAuth session via session.user.role
+      role: (session.user as { role?: string }).role || "user",
       isEmailVerified: true,
       onboardingStatus: session.onboardingStatus || "pending",
       createdAt: "",
@@ -208,9 +254,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const response = await api.get<{ user: User }>("/auth/me");
           if (isMounted && response.success && response.data?.user) {
             setFetchedUser(response.data.user);
+
+            // Auto-check and reschedule workouts in the background (silently)
+            // This runs automatically when user opens the app
+            // Use dynamic import to avoid blocking initial load
+            import('@/src/shared/services')
+              .then(({ workoutRescheduleService }) => {
+                workoutRescheduleService.autoCheckAndReschedule().catch((err) => {
+                  // Silently fail - don't interrupt user experience
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('[WorkoutAutoCheck] Background reschedule check completed with error:', err);
+                  }
+                });
+              })
+              .catch((importError) => {
+                // Silently fail if service can't be imported
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('[WorkoutAutoCheck] Failed to import service:', importError);
+                }
+              });
           }
         } catch (error) {
-          console.error("Failed to fetch user profile:", error);
           if (
             isMounted &&
             error instanceof ApiError &&
@@ -219,8 +283,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Token expired or invalid - sign out
             await signOut({ redirect: false });
             setFetchedUser(null);
+          } else if (error instanceof ApiError && error.code === "NETWORK_ERROR") {
+            // Server unreachable - use session data if available; avoid noisy console
+            if (process.env.NODE_ENV === "development") {
+              console.warn("[Auth] Server unreachable. Using session data if available.");
+            }
+          } else {
+            console.error("Failed to fetch user profile:", error);
           }
-          // For other errors, just log and continue with session data
         }
       };
       doFetch();
@@ -231,43 +301,84 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [status, session?.accessToken, session?.user?.id]);
 
+  // Check if user has a specific role (defined early for use in route protection)
+  const hasRole = useCallback(
+    (role: string) => {
+      if (!authState.user?.role) return false;
+      // Case-insensitive role comparison to handle "Admin" vs "admin"
+      return authState.user.role.toLowerCase() === role.toLowerCase();
+    },
+    [authState.user]
+  );
+
+  // Check if user is admin
+  const isAdmin = useCallback(() => {
+    return hasRole("admin");
+  }, [hasRole]);
+
   // Route protection
+  // Extract values to ensure stable dependency array
+  const isLoading = authState.isLoading;
+  const isAuthenticated = authState.isAuthenticated;
+  const onboardingStatus = authState.onboardingStatus;
+
   useEffect(() => {
-    if (authState.isLoading) return;
+    // Don't redirect while loading - wait for auth state to be determined
+    if (isLoading) return;
+
+    // Don't redirect if we're already on an error page or auth page
+    if (pathname.includes("?error=") || pathname.startsWith("/auth/")) {
+      return;
+    }
 
     const isProtectedRoute = PROTECTED_ROUTES.some((route) =>
+      pathname.startsWith(route)
+    );
+    const isAdminRoute = ADMIN_ROUTES.some((route) =>
       pathname.startsWith(route)
     );
     const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route));
 
     // Redirect to signin if trying to access protected route without auth
-    if (isProtectedRoute && !authState.isAuthenticated) {
-      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(pathname)}`);
+    if (isProtectedRoute && !isAuthenticated) {
+      const callbackUrl = encodeURIComponent(pathname);
+      routerRef.current.push(`/auth/signin?callbackUrl=${callbackUrl}`);
+      return;
+    }
+
+    // For admin routes, let the admin layout handle the check completely
+    // Don't redirect here to avoid conflicts with useAdminAccess hook
+    // The useAdminAccess hook in admin/layout.tsx will handle all admin route protection
+    if (isAdminRoute) {
+      // Only redirect to signin if not authenticated, let useAdminAccess handle role check
+      if (!isAuthenticated) {
+        const callbackUrl = encodeURIComponent(pathname);
+        routerRef.current.push(`/auth/signin?callbackUrl=${callbackUrl}`);
+      }
       return;
     }
 
     // Redirect to dashboard if authenticated and trying to access auth routes
-    if (isAuthRoute && authState.isAuthenticated) {
-      router.push("/dashboard");
+    if (isAuthRoute && isAuthenticated) {
+      routerRef.current.push("/dashboard");
       return;
     }
 
     // Handle onboarding redirect
     if (
-      authState.isAuthenticated &&
-      authState.onboardingStatus !== "completed" &&
+      isAuthenticated &&
+      onboardingStatus !== "completed" &&
       pathname.startsWith("/dashboard") &&
       !pathname.startsWith("/onboarding")
     ) {
       // Uncomment to enforce onboarding
-      // router.push("/onboarding");
+      // routerRef.current.push("/onboarding");
     }
   }, [
-    authState.isLoading,
-    authState.isAuthenticated,
-    authState.onboardingStatus,
+    isLoading,
+    isAuthenticated,
+    onboardingStatus,
     pathname,
-    router,
   ]);
 
   // Logout function
@@ -335,14 +446,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return authState.onboardingStatus === "completed";
   }, [authState.onboardingStatus]);
 
-  // Check if user has a specific role
-  const hasRole = useCallback(
-    (role: string) => {
-      return authState.user?.role === role;
-    },
-    [authState.user]
-  );
-
   const contextValue: AuthContextValue = {
     ...authState,
     logout,
@@ -352,6 +455,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     getDisplayName,
     isOnboardingComplete,
     hasRole,
+    isAdmin,
   };
 
   return (

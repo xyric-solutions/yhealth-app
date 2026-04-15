@@ -1,0 +1,23 @@
+{
+  "name": "@yhealth/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Shared types between yhealth client and server",
+  "main": "./types/index.ts",
+  "types": "./types/index.ts",
+  "exports": {
+    ".": "./types/index.ts",
+    "./types": "./types/index.ts",
+    "./types/*": "./types/*"
+  },
+  "files": [
+    "types"
+  ],
+  "keywords": [
+    "yhealth",
+    "types",
+    "shared"
+  ],
+  "license": "UNLICENSED",
+  "private": true
+}

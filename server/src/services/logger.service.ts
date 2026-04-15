@@ -28,7 +28,7 @@ class Logger {
   };
 
   private constructor() {
-    this.serviceName = 'yhealth-api';
+    this.serviceName = 'balencia-api';
     this.logLevel = (env.logging.level as LogLevel) || 'info';
   }
 

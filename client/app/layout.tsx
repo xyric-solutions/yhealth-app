@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
-import { Inter, Poppins } from "next/font/google";
+import { Inter, Poppins, Cinzel, Nunito } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { VoiceAssistantModal } from "@/components/common/voice-assistant-modal";
+import { AlarmProvider } from "./providers/AlarmProvider";
+import { ConfirmDialogProvider } from "@/components/common/ConfirmDialog";
+import { VisitorTracker } from "@/components/VisitorTracker";
+import { PersistentPlayer } from "@/components/music/PersistentPlayer";
+import { organizationJsonLd, webSiteJsonLd } from "@/lib/structured-data";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -14,42 +20,80 @@ const poppins = Poppins({
   subsets: ["latin"],
 });
 
+const cinzel = Cinzel({
+  variable: "--font-cinzel",
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+});
+
+const nunito = Nunito({
+  variable: "--font-nunito",
+  subsets: ["latin"],
+  weight: ["300", "400", "500"],
+});
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://balencia.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "YHealth - Your Personal Health Companion",
-    template: "%s | YHealth",
+    default: "Balencia - AI Life Coach for Health, Growth & Personal Transformation",
+    template: "%s | Balencia",
   },
   description:
-    "Transform your health journey with personalized wellness plans, AI-powered insights, and comprehensive health tracking. Start your path to a healthier you today.",
+    "Your AI-powered life coach for total self-improvement. Personalized fitness plans, nutrition guidance, mental wellness tools, life goal tracking, and daily coaching — all in one platform.",
   keywords: [
-    "health",
-    "wellness",
-    "fitness",
-    "nutrition",
-    "mental health",
-    "tracking",
-    "AI health",
-    "personalized health",
+    "AI life coach",
+    "personal improvement platform",
+    "AI wellness coach",
+    "life goal tracking",
+    "personalized coaching app",
+    "self-improvement platform",
+    "mental wellness tools",
+    "holistic life coaching",
+    "mood tracking",
+    "habit builder",
+    "guided breathing",
+    "AI-powered personal growth",
+    "digital life coach",
+    "coaching dashboard",
   ],
-  authors: [{ name: "YHealth Team" }],
+  authors: [{ name: "Balencia Team", url: SITE_URL }],
+  creator: "Balencia",
+  publisher: "Balencia",
+  applicationName: "Balencia",
+  category: "Life Coaching & Wellness",
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://yhealth.app",
-    title: "YHealth - Your Personal Health Companion",
+    url: SITE_URL,
+    title: "Balencia - AI Life Coach for Health, Growth & Personal Transformation",
     description:
-      "Transform your health journey with personalized wellness plans and AI-powered insights.",
-    siteName: "YHealth",
+      "AI-powered life coaching with personalized fitness plans, nutrition guidance, mental wellness tools, and life goal tracking — all in one platform.",
+    siteName: "Balencia",
   },
   twitter: {
     card: "summary_large_image",
-    title: "YHealth - Your Personal Health Companion",
+    title: "Balencia - AI Life Coach for Health, Growth & Personal Transformation",
     description:
-      "Transform your health journey with personalized wellness plans and AI-powered insights.",
+      "AI-powered life coaching with personalized fitness plans, nutrition guidance, mental wellness tools, and life goal tracking — all in one platform.",
+    creator: "@balenciaapp",
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  verification: {
+    // Add these when available:
+    // google: "google-verification-code",
+    // yandex: "yandex-verification-code",
   },
 };
 
@@ -59,11 +103,38 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        {/* Google Fonts for landing page hero section */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap"
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd()) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd()) }}
+        />
+      </head>
       <body
-        className={`${inter.variable} ${poppins.variable} font-sans antialiased`}
+        className={`${inter.variable} ${poppins.variable} ${cinzel.variable} ${nunito.variable} font-sans antialiased`}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          <AlarmProvider>
+            <ConfirmDialogProvider>
+              <VisitorTracker />
+              {children}
+              <PersistentPlayer />
+              {/* <FloatingVoiceAssistantWrapper /> */}
+              <VoiceAssistantModal />
+            </ConfirmDialogProvider>
+          </AlarmProvider>
+        </Providers>
       </body>
     </html>
   );

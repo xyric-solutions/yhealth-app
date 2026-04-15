@@ -23,6 +23,9 @@ export const FILE_TYPES = {
   avatar: {
     folder: 'avatars',
   },
+  blog: {
+    folder: 'blog',
+  },
   document: {
     folder: 'documents',
   },
@@ -97,6 +100,7 @@ class R2Service {
           accessKeyId: env.r2.accessKeyId!,
           secretAccessKey: env.r2.secretAccessKey!,
         },
+        maxAttempts: 3, // Retry up to 3 times
       });
       logger.info('R2 client created', { endpoint: env.r2.endpoint });
     } catch (error) {
@@ -166,44 +170,107 @@ class R2Service {
 
     const key = this.generateFileKey(originalName, options);
 
-    try {
-      await this.client.send(
-        new PutObjectCommand({
-          Bucket: this.bucketName,
-          Key: key,
-          Body: buffer,
-          ContentType: mimeType,
-          Metadata: {
-            originalName,
-            uploadedAt: new Date().toISOString(),
-            ...(options.userId && { userId: options.userId }),
-          },
-        })
-      );
+    // Retry logic with exponential backoff
+    const maxRetries = 2; // Total 3 attempts (initial + 2 retries)
+    let lastError: any = null;
 
-      logger.info('File uploaded to R2', { key, size: buffer.length, mimeType });
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Create a timeout promise (30 seconds)
+        const uploadPromise = this.client.send(
+          new PutObjectCommand({
+            Bucket: this.bucketName,
+            Key: key,
+            Body: buffer,
+            ContentType: mimeType,
+            Metadata: {
+              originalName,
+              uploadedAt: new Date().toISOString(),
+              ...(options.userId && { userId: options.userId }),
+            },
+          })
+        );
 
-      const result: UploadResult = {
-        key,
-        url: await this.getSignedUrl(key),
-        size: buffer.length,
-        mimeType,
-        originalName,
-      };
+        let timeoutId: NodeJS.Timeout;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error('Upload timeout after 30 seconds'));
+          }, 30000);
+        });
 
-      // Add public URL if configured and file is public
-      if (this.publicUrl && options.isPublic) {
-        result.publicUrl = `${this.publicUrl}/${key}`;
+        try {
+          await Promise.race([uploadPromise, timeoutPromise]);
+          clearTimeout(timeoutId!);
+        } catch (error) {
+          clearTimeout(timeoutId!);
+          throw error;
+        }
+
+        logger.info('File uploaded to R2', { 
+          key, 
+          size: buffer.length, 
+          mimeType,
+          attempt: attempt + 1,
+        });
+
+        const result: UploadResult = {
+          key,
+          url: await this.getSignedUrl(key),
+          size: buffer.length,
+          mimeType,
+          originalName,
+        };
+
+        // Add public URL if configured and file is public
+        if (this.publicUrl && options.isPublic) {
+          result.publicUrl = `${this.publicUrl}/${key}`;
+        }
+
+        return result;
+      } catch (error: any) {
+        lastError = error;
+        
+        const isTimeout = error?.code === 'ETIMEDOUT' || 
+                         error?.name === 'TimeoutError' ||
+                         error?.message?.includes('timeout') ||
+                         error?.message?.includes('ETIMEDOUT');
+
+        if (attempt < maxRetries) {
+          // Exponential backoff: 1s, 2s
+          const delay = Math.pow(2, attempt) * 1000;
+          logger.warn(`R2 upload attempt ${attempt + 1} failed, retrying in ${delay}ms`, {
+            key,
+            error: error?.message || 'Unknown error',
+            isTimeout,
+          });
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        } else {
+          // All retries exhausted
+          const errorDetails = {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            code: error?.Code || error?.code || error?.$metadata?.httpStatusCode,
+            name: error?.name,
+            requestId: error?.$metadata?.requestId,
+            httpStatusCode: error?.$metadata?.httpStatusCode,
+            key,
+            attempts: attempt + 1,
+          };
+          
+          logger.error('Failed to upload file to R2 after all retries', errorDetails);
+          
+          // Create a more informative error message
+          const errorMessage = errorDetails.code 
+            ? `R2 upload failed: ${errorDetails.code} - ${errorDetails.message}`
+            : `R2 upload failed: ${errorDetails.message || 'Unknown error'}`;
+          
+          throw new Error(errorMessage);
+        }
       }
-
-      return result;
-    } catch (error) {
-      logger.error('Failed to upload file to R2', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        key,
-      });
-      throw error;
     }
+
+    // This should never be reached, but TypeScript needs it
+    throw lastError || new Error('Upload failed');
   }
 
   /**

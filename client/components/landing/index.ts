@@ -1,11 +1,3 @@
-export { HeroSection } from "./hero-section";
-export { FeaturesSection } from "./features-section";
-export { HowItWorksSection } from "./how-it-works-section";
-export { AIAppFlowSection } from "./ai-app-flow-section";
-export { StatsSection } from "./stats-section";
-export { TestimonialsSection } from "./testimonials-section";
+export { ThreePillarsSection } from "./three-pillars-section";
 export { PricingSection } from "./pricing-section";
-export { IntegrationsSection } from "./integrations-section";
-export { AppDownloadSection } from "./app-download-section";
 export { FAQSection } from "./faq-section";
-export { CTASection } from "./cta-section";

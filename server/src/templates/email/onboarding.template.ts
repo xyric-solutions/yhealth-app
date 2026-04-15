@@ -27,7 +27,7 @@ export function onboardingCompleteTemplate(data: {
     </div>
 
     <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 26px; text-align: center;">
-      Congratulations! You've completed your yHealth onboarding. Your AI Life Coach is now fully personalized and ready to help you achieve your goals.
+      Congratulations! You've completed your Balencia onboarding. Your AI Life Coach is now fully personalized and ready to help you achieve your goals.
     </p>
 
     ${statsBox([
@@ -53,7 +53,7 @@ export function onboardingCompleteTemplate(data: {
 
   return baseEmailLayout({
     preheader: `${firstName}, you're all set! Your personalized AI Life Coach is ready.`,
-    title: 'Onboarding Complete! - yHealth',
+    title: 'Onboarding Complete! - Balencia',
     greeting: `Awesome work, ${firstName}!`,
     content,
     ctaButton: {
@@ -137,7 +137,7 @@ export function weeklyProgressTemplate(data: {
 
   return baseEmailLayout({
     preheader: `${firstName}, here's your Week ${weekNumber} progress - ${stats.streakDays} day streak!`,
-    title: `Week ${weekNumber} Summary - yHealth`,
+    title: `Week ${weekNumber} Summary - Balencia`,
     greeting: `Hi ${firstName},`,
     content,
     ctaButton: {
@@ -207,7 +207,7 @@ export function milestoneAchievedTemplate(data: {
 
   return baseEmailLayout({
     preheader: `${firstName}, you hit a milestone! ${milestoneName} - Celebrate your progress!`,
-    title: 'Milestone Achieved! - yHealth',
+    title: 'Milestone Achieved! - Balencia',
     greeting: `Way to go, ${firstName}!`,
     content,
     ctaButton: {
@@ -272,7 +272,7 @@ export function streakMilestoneTemplate(data: {
 
   return baseEmailLayout({
     preheader: `${firstName}, ${streakDays} day streak! ${emoji} You're on fire!`,
-    title: `${streakDays} Day Streak! - yHealth`,
+    title: `${streakDays} Day Streak! - Balencia`,
     greeting: `Incredible, ${firstName}!`,
     content,
     ctaButton: {
@@ -331,7 +331,7 @@ export function reEngagementTemplate(data: {
 
   return baseEmailLayout({
     preheader: `${firstName}, we miss you! Your AI coach is ready when you are.`,
-    title: 'We Miss You! - yHealth',
+    title: 'We Miss You! - Balencia',
     greeting: `Hey ${firstName},`,
     content,
     ctaButton: {

@@ -1,5 +1,5 @@
-import type { Response } from 'express';
-import type { ApiResponse as IApiResponse, PaginationMeta, ValidationError } from '../types/index.js';
+import type { Response, Request } from 'express';
+import type { ApiResponse as IApiResponse, PaginationMeta, ValidationError, AuthenticatedRequest } from '../types/index.js';
 
 type SuccessOptions = {
   message?: string;
@@ -8,20 +8,32 @@ type SuccessOptions = {
   requestId?: string;
 };
 
+/**
+ * Extract requestId from request object if available
+ */
+function extractRequestId(req?: Request | AuthenticatedRequest): string | undefined {
+  if (!req) return undefined;
+  return (req as AuthenticatedRequest).requestId;
+}
+
 export class ApiResponse {
   // Success responses - supports both object options and legacy string message
   static success<T>(
     res: Response,
     data?: T,
     optionsOrMessage: SuccessOptions | string = {},
-    statusCode?: number
+    statusCode?: number,
+    req?: Request | AuthenticatedRequest
   ): Response {
     // Support both object options and legacy string message
     const options: SuccessOptions = typeof optionsOrMessage === 'string'
       ? { message: optionsOrMessage, statusCode: statusCode ?? 200 }
       : optionsOrMessage;
 
-    const { message = 'Success', statusCode: code = 200, meta, requestId } = options;
+    // Extract requestId from request if not explicitly provided in options
+    const requestId = options.requestId || extractRequestId(req);
+
+    const { message = 'Success', statusCode: code = 200, meta } = options;
 
     const response: IApiResponse<T> = {
       success: true,
@@ -35,8 +47,8 @@ export class ApiResponse {
     return res.status(code).json(response);
   }
 
-  static created<T>(res: Response, data: T, message = 'Resource created successfully'): Response {
-    return this.success(res, data, { message, statusCode: 201 });
+  static created<T>(res: Response, data: T, message = 'Resource created successfully', req?: Request | AuthenticatedRequest): Response {
+    return this.success(res, data, { message, statusCode: 201 }, undefined, req);
   }
 
   static noContent(res: Response): Response {
@@ -51,7 +63,8 @@ export class ApiResponse {
       limit: number;
       total: number;
     },
-    message = 'Success'
+    message = 'Success',
+    req?: Request | AuthenticatedRequest
   ): Response {
     const { page, limit, total } = pagination;
     const totalPages = Math.ceil(total / limit);
@@ -65,7 +78,7 @@ export class ApiResponse {
       hasPrevPage: page > 1,
     };
 
-    return this.success(res, data, { message, meta });
+    return this.success(res, data, { message, meta }, undefined, req);
   }
 
   // Error responses
@@ -77,15 +90,19 @@ export class ApiResponse {
       code?: string;
       errors?: ValidationError[];
       requestId?: string;
-    } = {}
+    } = {},
+    req?: Request | AuthenticatedRequest
   ): Response {
     const {
       message = 'An error occurred',
       statusCode = 500,
       code: _code = 'INTERNAL_ERROR',
       errors,
-      requestId,
+      requestId: explicitRequestId,
     } = options;
+
+    // Extract requestId from request if not explicitly provided in options
+    const requestId = explicitRequestId || extractRequestId(req);
 
     const response: IApiResponse = {
       success: false,
@@ -98,41 +115,41 @@ export class ApiResponse {
     return res.status(statusCode).json(response);
   }
 
-  static badRequest(res: Response, message = 'Bad Request', errors?: ValidationError[]): Response {
-    return this.error(res, { message, statusCode: 400, code: 'BAD_REQUEST', errors });
+  static badRequest(res: Response, message = 'Bad Request', errors?: ValidationError[], req?: Request | AuthenticatedRequest): Response {
+    return this.error(res, { message, statusCode: 400, code: 'BAD_REQUEST', errors }, req);
   }
 
-  static unauthorized(res: Response, message = 'Unauthorized'): Response {
-    return this.error(res, { message, statusCode: 401, code: 'UNAUTHORIZED' });
+  static unauthorized(res: Response, message = 'Unauthorized', req?: Request | AuthenticatedRequest): Response {
+    return this.error(res, { message, statusCode: 401, code: 'UNAUTHORIZED' }, req);
   }
 
-  static forbidden(res: Response, message = 'Forbidden'): Response {
-    return this.error(res, { message, statusCode: 403, code: 'FORBIDDEN' });
+  static forbidden(res: Response, message = 'Forbidden', req?: Request | AuthenticatedRequest): Response {
+    return this.error(res, { message, statusCode: 403, code: 'FORBIDDEN' }, req);
   }
 
-  static notFound(res: Response, message = 'Resource not found'): Response {
-    return this.error(res, { message, statusCode: 404, code: 'NOT_FOUND' });
+  static notFound(res: Response, message = 'Resource not found', req?: Request | AuthenticatedRequest): Response {
+    return this.error(res, { message, statusCode: 404, code: 'NOT_FOUND' }, req);
   }
 
-  static conflict(res: Response, message = 'Resource already exists'): Response {
-    return this.error(res, { message, statusCode: 409, code: 'CONFLICT' });
+  static conflict(res: Response, message = 'Resource already exists', req?: Request | AuthenticatedRequest): Response {
+    return this.error(res, { message, statusCode: 409, code: 'CONFLICT' }, req);
   }
 
-  static validationError(res: Response, errors: ValidationError[]): Response {
+  static validationError(res: Response, errors: ValidationError[], req?: Request | AuthenticatedRequest): Response {
     return this.error(res, {
       message: 'Validation Error',
       statusCode: 422,
       code: 'VALIDATION_ERROR',
       errors,
-    });
+    }, req);
   }
 
-  static tooManyRequests(res: Response, message = 'Too many requests'): Response {
-    return this.error(res, { message, statusCode: 429, code: 'TOO_MANY_REQUESTS' });
+  static tooManyRequests(res: Response, message = 'Too many requests', req?: Request | AuthenticatedRequest): Response {
+    return this.error(res, { message, statusCode: 429, code: 'TOO_MANY_REQUESTS' }, req);
   }
 
-  static internal(res: Response, message = 'Internal Server Error'): Response {
-    return this.error(res, { message, statusCode: 500, code: 'INTERNAL_SERVER_ERROR' });
+  static internal(res: Response, message = 'Internal Server Error', req?: Request | AuthenticatedRequest): Response {
+    return this.error(res, { message, statusCode: 500, code: 'INTERNAL_SERVER_ERROR' }, req);
   }
 }
 

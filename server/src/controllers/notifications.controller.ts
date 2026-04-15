@@ -4,6 +4,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { query } from '../database/pg.js';
+import { notificationEngine } from '../services/notification-engine.service.js';
 
 // Types
 interface Notification {
@@ -19,15 +20,15 @@ interface Notification {
   category?: string;
   priority: string;
   isRead: boolean;
-  readAt?: Date;
+  readAt?: string;
   isArchived: boolean;
-  archivedAt?: Date;
+  archivedAt?: string;
   relatedEntityType?: string;
   relatedEntityId?: string;
   metadata?: Record<string, unknown>;
-  expiresAt?: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  expiresAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface NotificationRow {
@@ -54,6 +55,14 @@ interface NotificationRow {
   updated_at: Date;
 }
 
+// Helper to convert Date to ISO string with timezone (UTC)
+function toISOStringWithTimezone(date: Date | null | undefined): string | undefined {
+  if (!date) return undefined;
+  // PostgreSQL TIMESTAMP without timezone is treated as UTC
+  // Ensure we return a proper ISO 8601 string with 'Z' suffix
+  return date instanceof Date ? date.toISOString() : undefined;
+}
+
 // Transform database row to API response
 function transformNotification(row: NotificationRow): Notification {
   return {
@@ -69,15 +78,15 @@ function transformNotification(row: NotificationRow): Notification {
     category: row.category || undefined,
     priority: row.priority,
     isRead: row.is_read,
-    readAt: row.read_at || undefined,
+    readAt: toISOStringWithTimezone(row.read_at),
     isArchived: row.is_archived,
-    archivedAt: row.archived_at || undefined,
+    archivedAt: toISOStringWithTimezone(row.archived_at),
     relatedEntityType: row.related_entity_type || undefined,
     relatedEntityId: row.related_entity_id || undefined,
     metadata: row.metadata || undefined,
-    expiresAt: row.expires_at || undefined,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    expiresAt: toISOStringWithTimezone(row.expires_at),
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
   };
 }
 
@@ -262,6 +271,9 @@ const markAsRead = asyncHandler(async (req: AuthenticatedRequest, res: Response)
     { notification: transformNotification(result.rows[0]) },
     'Notification marked as read'
   );
+
+  // Emit updated counts via socket (fire-and-forget)
+  notificationEngine.emitCountUpdate(userId).catch(() => {});
 });
 
 // Mark notification as unread
@@ -288,6 +300,8 @@ const markAsUnread = asyncHandler(async (req: AuthenticatedRequest, res: Respons
     { notification: transformNotification(result.rows[0]) },
     'Notification marked as unread'
   );
+
+  notificationEngine.emitCountUpdate(userId).catch(() => {});
 });
 
 // Mark multiple notifications as read
@@ -319,6 +333,8 @@ const markMultipleAsRead = asyncHandler(async (req: AuthenticatedRequest, res: R
     { updatedCount: result.rows.length },
     `${result.rows.length} notifications marked as read`
   );
+
+  notificationEngine.emitCountUpdate(userId).catch(() => {});
 });
 
 // Mark all notifications as read
@@ -353,6 +369,8 @@ const markAllAsRead = asyncHandler(async (req: AuthenticatedRequest, res: Respon
     { updatedCount: result.rows.length },
     `${result.rows.length} notifications marked as read`
   );
+
+  notificationEngine.emitCountUpdate(userId).catch(() => {});
 });
 
 // Archive notification
@@ -379,6 +397,8 @@ const archiveNotification = asyncHandler(async (req: AuthenticatedRequest, res: 
     { notification: transformNotification(result.rows[0]) },
     'Notification archived'
   );
+
+  notificationEngine.emitCountUpdate(userId).catch(() => {});
 });
 
 // Unarchive notification
@@ -405,6 +425,8 @@ const unarchiveNotification = asyncHandler(async (req: AuthenticatedRequest, res
     { notification: transformNotification(result.rows[0]) },
     'Notification unarchived'
   );
+
+  notificationEngine.emitCountUpdate(userId).catch(() => {});
 });
 
 // Delete notification
@@ -424,6 +446,8 @@ const deleteNotification = asyncHandler(async (req: AuthenticatedRequest, res: R
   }
 
   ApiResponse.success(res, null, 'Notification deleted');
+
+  notificationEngine.emitCountUpdate(userId).catch(() => {});
 });
 
 // Delete multiple notifications
@@ -454,6 +478,8 @@ const deleteMultipleNotifications = asyncHandler(async (req: AuthenticatedReques
     { deletedCount: result.rows.length },
     `${result.rows.length} notifications deleted`
   );
+
+  notificationEngine.emitCountUpdate(userId).catch(() => {});
 });
 
 // Delete all read notifications
@@ -473,6 +499,8 @@ const deleteAllRead = asyncHandler(async (req: AuthenticatedRequest, res: Respon
     { deletedCount: result.rows.length },
     `${result.rows.length} read notifications deleted`
   );
+
+  notificationEngine.emitCountUpdate(userId).catch(() => {});
 });
 
 // Create notification (internal use / admin)
@@ -524,11 +552,29 @@ const createNotification = asyncHandler(async (req: AuthenticatedRequest, res: R
     ]
   );
 
+  const notification = result.rows[0];
+
   ApiResponse.success(
     res,
-    { notification: transformNotification(result.rows[0]) },
+    { notification: transformNotification(notification) },
     'Notification created successfully'
   );
+
+  // Emit real-time notification + updated counts (fire-and-forget)
+  if (notification) {
+    const { socketService } = await import('../services/socket.service.js');
+    socketService.emitToUser(notificationUserId, 'notification:new', {
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      priority: notification.priority,
+      icon: notification.icon,
+      actionUrl: notification.action_url,
+      createdAt: notification.created_at.toISOString(),
+    });
+    notificationEngine.emitCountUpdate(notificationUserId).catch(() => {});
+  }
 });
 
 // Get notification statistics

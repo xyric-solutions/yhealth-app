@@ -6,8 +6,7 @@ import {
   Settings,
   User,
   Shield,
-  Bell,
-  Smartphone,
+
   Link as LinkIcon,
   Unlink,
   Download,
@@ -16,13 +15,14 @@ import {
   ChevronRight,
   ExternalLink,
   Key,
-  Eye,
-  EyeOff,
   AlertTriangle,
   CheckCircle2,
+  HelpCircle,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/app/context/AuthContext";
+import { useProductTour } from "@/hooks/use-product-tour";
 
 interface Integration {
   id: string;
@@ -41,7 +41,8 @@ const mockIntegrations: Integration[] = [
 ];
 
 export function SettingsTab() {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
+  const { resetTour, startTour } = useProductTour();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [integrations, setIntegrations] = useState(mockIntegrations);
 
@@ -178,6 +179,7 @@ export function SettingsTab() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className="lg:col-span-2 rounded-2xl bg-white/5 border border-white/10 overflow-hidden"
+          data-tour="integrations"
         >
           <div className="p-5 border-b border-white/10">
             <div className="flex items-center justify-between">
@@ -280,6 +282,40 @@ export function SettingsTab() {
                   <p className="text-sm text-slate-400">Download activity history</p>
                 </div>
                 <ExternalLink className="w-5 h-5 text-slate-400" />
+              </div>
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Help & Support */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden"
+        >
+          <div className="p-5 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <HelpCircle className="w-5 h-5 text-blue-400" />
+              <h3 className="font-semibold text-white">Help & Support</h3>
+            </div>
+          </div>
+          <div className="p-5 space-y-3">
+            <button
+              onClick={() => {
+                resetTour();
+                startTour();
+              }}
+              className="w-full p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors text-left"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-white">Replay Product Tour</p>
+                  <p className="text-sm text-slate-400">
+                    Take a guided walkthrough of Balencia features
+                  </p>
+                </div>
+                <Sparkles className="w-5 h-5 text-cyan-400" />
               </div>
             </button>
           </div>

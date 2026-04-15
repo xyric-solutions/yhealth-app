@@ -1,0 +1,1 @@
+export { KnowledgeGraphTab } from './KnowledgeGraphTab';
