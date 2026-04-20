@@ -4,7 +4,7 @@
 
 # Local AI / assistant settings
 .claude/
-.salman-agents-skills/
+
 
 # Node modules in nested projects (client, server, etc.)
 node_modules/
